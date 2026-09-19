@@ -1,4 +1,5 @@
 import type { UsageTone } from "./contract";
+import type { PaceTrend } from "./pace";
 
 /**
  * The one place bar colours are defined. Both surfaces that paint a bar — the
@@ -14,8 +15,16 @@ import type { UsageTone } from "./contract";
  * the orange→red step the only colour change in the block.
  *
  * `default` stays grey: it is not a low reading, it is a missing one.
+ *
+ * `behind` is the one green in the plugin, and it is deliberately not a bar
+ * fill. The pace arrow is a two-directional reading where the bars are a
+ * one-directional ramp, so it needs a colour for "under pace" that the ramp
+ * does not have — and a green arrow beside a blue bar cannot be mistaken for
+ * part of the ramp the way a green fill would be. Ahead-of-pace reuses the
+ * ramp's own warning and danger, so the arrow and the bar under it escalate on
+ * the same two colours.
  */
-type Palette = Record<UsageTone, string>;
+type Palette = Record<UsageTone, string> & { behind: string };
 
 /**
  * Tuned against a light track (#e4e4e7), not against text rules. The previous
@@ -28,12 +37,17 @@ type Palette = Record<UsageTone, string>;
  * sits at 2.8 on the track and 3.6 on the page behind it, which is the point where
  * it still reads unambiguously orange. Pure #f97316 would be 2.0 and vanish.
  * Blue and red pay no such tax and clear 3:1 on both.
+ *
+ * The green is measured the same way: 3.98 on the track, between this ramp's own
+ * ok (3.84) and danger (4.07), so the arrow carries the weight of a bar fill
+ * without being one.
  */
 export const STATUS_LIGHT: Palette = {
   ok: "#2f6fd0",
   warning: "#cc7016",
   danger: "#c53b3b",
   default: "#71717a",
+  behind: "#2e7d4f",
 };
 
 /** Same ramp against a dark track (#434645), where brightness and contrast agree. */
@@ -42,6 +56,7 @@ export const STATUS_DARK: Palette = {
   warning: "#e8a462",
   danger: "#e8756a",
   default: "#8b90a0",
+  behind: "#6fc08a",
 };
 
 /** Perceived lightness of an `#rrggbb` colour, or null when it is not one. */
@@ -58,6 +73,18 @@ export function hexLuminance(color: string): number | null {
 export function paletteForSurface(color: string): Palette {
   const luminance = hexLuminance(color);
   return luminance != null && luminance > 0.6 ? STATUS_LIGHT : STATUS_DARK;
+}
+
+/**
+ * The arrow's colour. Under pace is green; the two degrees of overspend are the
+ * ramp's warning and danger, so a row whose bar has gone orange does not sprout
+ * a red arrow beside it until the overspend is worth the escalation.
+ */
+export function paceColor(palette: Palette, trend: PaceTrend): string {
+  if (trend === "over") {
+    return palette.danger;
+  }
+  return trend === "ahead" ? palette.warning : palette.behind;
 }
 
 export type { Palette };

@@ -12,6 +12,13 @@ export const SelectionSchema = z.object({
   keys: z.array(z.string()).default([]),
   /** False until the user picks anything; the meter then shows its own default. */
   configured: z.boolean().default(false),
+  /**
+   * The pace arrow beside each percentage. Defaults on — it is the reading that
+   * says whether the percentage next to it is a problem — and lives here rather
+   * than in its own store because it is the second thing this plugin persists
+   * and a second state file to keep in sync would cost more than the field does.
+   */
+  showPace: z.boolean().default(true),
 });
 
 export type Selection = z.output<typeof SelectionSchema>;
@@ -22,9 +29,14 @@ export const readSelection = defineRpc({
   output: SelectionSchema,
 });
 
+/**
+ * Both fields optional, and each written independently: flipping the pace arrow
+ * must not freeze the default pin set into an explicit one, and a reorder must
+ * not carry a stale copy of the toggle back over a newer value.
+ */
 export const writeSelection = defineRpc({
   name: "selection.write",
-  input: z.object({ keys: z.array(z.string()) }),
+  input: z.object({ keys: z.array(z.string()).optional(), showPace: z.boolean().optional() }),
   output: SelectionSchema,
 });
 
@@ -59,7 +71,10 @@ export type PinnedRow = {
  */
 export function pinnedRows(
   snapshot: UsageSnapshot,
-  selection: Selection,
+  // Only the arrangement, not the whole stored selection: the panel resolves
+  // rows from a local, not-yet-persisted order, and narrowing here keeps it from
+  // having to invent a value for every display preference the file grows.
+  selection: Pick<Selection, "keys" | "configured">,
   labelFor: (provider: ProviderUsage, window: UsageWindow, messages: Messages) => string,
   messages: Messages,
 ): PinnedRow[] {

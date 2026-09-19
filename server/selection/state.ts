@@ -12,7 +12,7 @@ import { SelectionSchema, type Selection } from "../../shared/selection/contract
  * daemon-owned files, and replaced atomically so a crash mid-write cannot leave
  * a truncated file behind.
  */
-const EMPTY: Selection = { keys: [], configured: false };
+const EMPTY: Selection = { keys: [], configured: false, showPace: true };
 
 function stateFile(): string {
   const base = process.env.XDG_STATE_HOME?.trim() || join(homedir(), ".local", "state");
@@ -28,9 +28,20 @@ export function readSelectionState(): Selection {
   }
 }
 
-export function writeSelectionState({ keys }: { keys: string[] }): Selection {
-  const unique = [...new Set(keys.filter((key) => typeof key === "string" && key.length > 0))];
-  const next: Selection = { keys: unique, configured: true };
+/**
+ * Merges rather than replaces: the two settings in this file are written by
+ * different controls, and an absent field means "leave it alone", not "clear
+ * it". Pinning stays the only thing that marks the selection configured — the
+ * pace toggle is a display preference and has no business promoting the default
+ * pin set into a frozen one.
+ */
+export function writeSelectionState({ keys, showPace }: { keys?: string[]; showPace?: boolean }): Selection {
+  const current = readSelectionState();
+  const next: Selection = {
+    keys: keys ? [...new Set(keys.filter((key) => typeof key === "string" && key.length > 0))] : current.keys,
+    configured: keys ? true : current.configured,
+    showPace: showPace ?? current.showPace,
+  };
   const path = stateFile();
   try {
     mkdirSync(join(path, ".."), { recursive: true, mode: 0o700 });
@@ -44,6 +55,8 @@ export function writeSelectionState({ keys }: { keys: string[] }): Selection {
     console.error("[usage-sidebar] Could not persist the sidebar selection", error);
     throw new Error(`Could not persist the sidebar selection: ${error instanceof Error ? error.message : error}`);
   }
-  console.log(`[usage-sidebar] Pinned rows saved: ${next.keys.join(", ") || "(none)"}`);
+  console.log(
+    `[usage-sidebar] Saved: pinned ${next.keys.join(", ") || "(none)"}; pace ${next.showPace ? "on" : "off"}`,
+  );
   return next;
 }

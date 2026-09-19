@@ -33,7 +33,7 @@ Same layout as **Settings → Usage**: one bordered card, one row per provider.
 
 | Row | Shows |
 | --- | --- |
-| **Quota window** | `57% · resets in 2h 15m`, or `57% · resets at Nov 12, 10:00` once the reset is more than a day out. |
+| **Quota window** | `57% ▲12% · resets in 2h 15m`, or `57% ▲12% · resets at Nov 12, 10:00` once the reset is more than a day out. The arrow is [pace](#pace). |
 | **Balance** | Money, credits, requests, or tokens — against a ceiling when the provider reports one. |
 | **Detail** | Provider-supplied key/value lines such as `Extra usage: Disabled`. |
 | **Status** | Providers you are not signed into stay listed with an `Unavailable` dot instead of vanishing. |
@@ -54,8 +54,9 @@ the model-scoped one `Weekly · Fable` in English only.
 
 *Desktop and web only.*
 
-One row per pinned window, directly under the sidebar entry: label, percentage, a thin bar, and the
-reset. Same 60-second cycle, no click needed.
+One row per pinned window, directly under the sidebar entry: label, percentage and its
+[pace](#pace) arrow, a thin bar marked with where the clock stands, and the reset. Same 60-second
+cycle, no click needed.
 
 <p align="center">
   <img src="images/sidebar-meter.png" alt="The sidebar meter on the Light theme" width="320">
@@ -110,9 +111,14 @@ settings toggle yet.
 | **Red** | over 90%, or projected to run out before it resets | Act now, or wait for the reset. |
 | **Grey** | no percentage reported | Not a low reading — a missing one. |
 
-Green is deliberately absent. It reads as "good", which spends the eye's only strong signal on the
-state that needs no attention. Blue is the neutral "nothing to do here", so warm hues mean exactly
-one thing and orange→red is the block's only colour change.
+Green is deliberately absent **from the fills**. It reads as "good", which spends the eye's only
+strong signal on the state that needs no attention. Blue is the neutral "nothing to do here", so
+warm hues mean exactly one thing and orange→red is the block's only colour change.
+
+The one green in the plugin is the pace arrow's "behind the clock". Pace is a two-directional
+reading, and a one-directional ramp has no colour for its good end — but a green arrow beside a blue
+bar cannot be read as part of the ramp the way a green fill would be. Ahead-of-pace reuses the ramp's
+own orange and red, so an arrow and the bar beneath it escalate on the same two colours.
 
 A bar takes the **more severe** of the provider's reported tone and the one its percentage implies.
 Trusting the provider alone lets its thresholds decide where this ramp steps, and paints grey for a
@@ -122,6 +128,34 @@ window projected to run out early is red at 40%.
 Both surfaces read one table, `shared/usage/palette.ts`. Host `theme.colors.status*` tokens are not
 used for fills: they are tuned for text, so on the Light theme `statusWarning` is a dark amber that
 reads as brown at 4px.
+
+## Pace
+
+A percentage says how much is gone. It cannot say whether that is a lot — and that depends entirely
+on where the window is in its own life. `▲12%` beside the number means twelve points ahead of the
+clock: 57% spent of a window only 45% elapsed. A tick on the bar marks where the fill would sit if
+you were tracking the clock exactly, so the gap between the tick and the fill edge is the arrow's
+number, drawn to scale.
+
+| Reading | Means |
+| --- | --- |
+| **▼ green** | Behind the clock. At this rate the window resets with headroom to spare. |
+| **▲ orange** | 1–5 points ahead. Worth knowing; not worth changing plans over. |
+| **▲ red** | More than 5 points ahead. The window runs out early unless the rate drops. |
+
+Nothing shows within a point of pace. The elapsed share advances every second while the used share
+only moves when you spend, so without a dead band every bar would flicker an arrow at a fraction of
+a point off and the signal would stop meaning anything.
+
+The elapsed share is reconstructed backwards from the reset instant, because the daemon reports when
+a window resets but never when it began or how long it runs: `five_hour` is five hours, `weekly` and
+`weekly_<model>` seven days, `daily` a day, and `monthly` a real calendar month — 28 days back from a
+1 March reset, not a flat 30. A window whose id does not state its period (`coding_limit_*`,
+`interval_*`, anything provider-specific) shows no arrow and no tick, rather than one derived from a
+guess.
+
+**Pace** in the panel header turns the whole reading off on both surfaces. The choice is stored
+beside the pin set, and defaults on.
 
 ## Pinning and ordering
 
@@ -135,8 +169,11 @@ the arrow buttons — sets the exact order the meter paints them in.
 - A pin takes effect immediately rather than on the next poll — the panel and the meter share one
   in-renderer store.
 - The pin set is written atomically to `$XDG_STATE_HOME/paseo-usage-sidebar/selection.json`
-  (default `~/.local/state/…`). It holds provider and window **ids only**: no tokens, no usage
-  numbers, nothing account-identifying.
+  (default `~/.local/state/…`), alongside the [pace](#pace) toggle. It holds provider and window
+  **ids** and that one boolean: no tokens, no usage numbers, nothing account-identifying.
+- The two are written independently and merged server-side, so flipping the pace arrow never freezes
+  the default pin set into an explicit one, and a reorder never carries a stale toggle back over a
+  newer value.
 
 ## Localization
 
@@ -175,7 +212,7 @@ Paseo plugins are unsandboxed by design, so this is worth reading before you tru
 - **No credentials** are read, stored, or transmitted. The plugin never touches `~/.claude`,
   `~/.codex`, the macOS Keychain, or any provider token.
 - **No outbound network access.** Nothing leaves the machine; the plugin opens no sockets at all.
-- **One write, and it is yours** — the pin set described above. No config is touched, no daemon
+- **One write, and it is yours** — the pin set and pace toggle described above. No config is touched, no daemon
   state is mutated.
 - **Client code** renders the response and stores nothing.
 
@@ -204,6 +241,8 @@ Paseo plugins are unsandboxed by design, so this is worth reading before you tru
     └── usage/
         ├── contract.ts             # Zod mirror of the daemon's provider.usage.list payload
         ├── palette.ts              # The blue/orange/red bar ramp, shared by both surfaces
+        ├── pace.ts                 # Spend against the clock: elapsed share, delta, thresholds
+        ├── pace.check.ts           # Its self-check — the one module here with arithmetic in it
         ├── format.ts               # Percentage, reset, age, tone, and balance formatting
         └── window-label.ts         # Daemon window ids → /usage-style window names
 ```
@@ -227,6 +266,7 @@ code, `@getpaseo/plugin/server` for server code.
 ```bash
 npm install
 npm run typecheck
+npx tsx shared/usage/pace.check.ts   # asserts for the pace arithmetic; no test runner in this repo
 
 paseo plugin install "$PWD"
 paseo plugin reload usage-sidebar   # after editing source
@@ -246,8 +286,9 @@ an optional `!`, then a lower-case subject with no trailing period. A `!` must c
 `git config core.hooksPath .githooks` to install it without `npm install`, and
 `git commit --no-verify` to skip it.
 
-Issues and pull requests are welcome. Please run `npm run typecheck` before opening one, and keep
-new modules inside the `client/` / `server/` / `shared/` layout above.
+Issues and pull requests are welcome. Please run `npm run typecheck` before opening one — plus
+`npx tsx shared/usage/pace.check.ts` if you touch `shared/usage/pace.ts` — and keep new modules
+inside the `client/` / `server/` / `shared/` layout above.
 
 ## License
 

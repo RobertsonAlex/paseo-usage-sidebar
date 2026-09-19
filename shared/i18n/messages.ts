@@ -48,6 +48,12 @@ export type Messages = {
   moveUp: string;
   moveDown: string;
   reorder: string;
+  /** The pace toggle, and the arrow it shows, spelled out for tooltips and screen readers. */
+  pace: string;
+  showPace: string;
+  hidePace: string;
+  paceAhead: (points: string) => string;
+  paceBehind: (points: string) => string;
 };
 
 const en: Messages = {
@@ -83,6 +89,11 @@ const en: Messages = {
   moveUp: "Move up",
   moveDown: "Move down",
   reorder: "Drag to reorder",
+  pace: "Pace",
+  showPace: "Show pace against the clock",
+  hidePace: "Hide pace against the clock",
+  paceAhead: (points) => `${points} points ahead of pace`,
+  paceBehind: (points) => `${points} points behind pace`,
 };
 
 const zhCN: Messages = {
@@ -120,6 +131,11 @@ const zhCN: Messages = {
   moveUp: "上移",
   moveDown: "下移",
   reorder: "拖拽排序",
+  pace: "进度",
+  showPace: "显示与时间进度的对比",
+  hidePace: "隐藏与时间进度的对比",
+  paceAhead: (points) => `超出时间进度 ${points} 个百分点`,
+  paceBehind: (points) => `落后时间进度 ${points} 个百分点`,
 };
 
 const ja: Messages = {
@@ -155,6 +171,11 @@ const ja: Messages = {
   moveUp: "上へ",
   moveDown: "下へ",
   reorder: "ドラッグして並べ替え",
+  pace: "ペース",
+  showPace: "経過時間とのペースを表示",
+  hidePace: "経過時間とのペースを非表示",
+  paceAhead: (points) => `ペースより ${points} ポイント多い`,
+  paceBehind: (points) => `ペースより ${points} ポイント少ない`,
 };
 
 const ko: Messages = {
@@ -190,6 +211,11 @@ const ko: Messages = {
   moveUp: "위로",
   moveDown: "아래로",
   reorder: "끌어서 순서 변경",
+  pace: "속도",
+  showPace: "경과 시간 대비 속도 표시",
+  hidePace: "경과 시간 대비 속도 숨기기",
+  paceAhead: (points) => `기준보다 ${points}포인트 빠름`,
+  paceBehind: (points) => `기준보다 ${points}포인트 느림`,
 };
 
 const es: Messages = {
@@ -225,6 +251,11 @@ const es: Messages = {
   moveUp: "Subir",
   moveDown: "Bajar",
   reorder: "Arrastra para reordenar",
+  pace: "Ritmo",
+  showPace: "Mostrar el ritmo frente al tiempo",
+  hidePace: "Ocultar el ritmo frente al tiempo",
+  paceAhead: (points) => `${points} puntos por encima del ritmo`,
+  paceBehind: (points) => `${points} puntos por debajo del ritmo`,
 };
 
 const fr: Messages = {
@@ -260,6 +291,11 @@ const fr: Messages = {
   moveUp: "Monter",
   moveDown: "Descendre",
   reorder: "Glisser pour réordonner",
+  pace: "Rythme",
+  showPace: "Afficher le rythme par rapport au temps",
+  hidePace: "Masquer le rythme par rapport au temps",
+  paceAhead: (points) => `${points} points au-dessus du rythme`,
+  paceBehind: (points) => `${points} points en dessous du rythme`,
 };
 
 const ptBR: Messages = {
@@ -295,6 +331,11 @@ const ptBR: Messages = {
   moveUp: "Mover para cima",
   moveDown: "Mover para baixo",
   reorder: "Arraste para reordenar",
+  pace: "Ritmo",
+  showPace: "Mostrar o ritmo em relação ao tempo",
+  hidePace: "Ocultar o ritmo em relação ao tempo",
+  paceAhead: (points) => `${points} pontos acima do ritmo`,
+  paceBehind: (points) => `${points} pontos abaixo do ritmo`,
 };
 
 const ru: Messages = {
@@ -330,6 +371,11 @@ const ru: Messages = {
   moveUp: "Вверх",
   moveDown: "Вниз",
   reorder: "Перетащите, чтобы изменить порядок",
+  pace: "Темп",
+  showPace: "Показывать темп относительно времени",
+  hidePace: "Скрыть темп относительно времени",
+  paceAhead: (points) => `на ${points} п. п. выше темпа`,
+  paceBehind: (points) => `на ${points} п. п. ниже темпа`,
 };
 
 const ar: Messages = {
@@ -365,6 +411,11 @@ const ar: Messages = {
   moveUp: "تحريك لأعلى",
   moveDown: "تحريك لأسفل",
   reorder: "اسحب لإعادة الترتيب",
+  pace: "الوتيرة",
+  showPace: "إظهار الوتيرة مقابل الوقت",
+  hidePace: "إخفاء الوتيرة مقابل الوقت",
+  paceAhead: (points) => `${points} نقطة فوق الوتيرة`,
+  paceBehind: (points) => `${points} نقطة دون الوتيرة`,
 };
 
 export const MESSAGES: Record<Locale, Messages> = {

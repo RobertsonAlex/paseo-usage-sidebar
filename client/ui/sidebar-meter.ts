@@ -12,7 +12,8 @@ import {
   formatRunsOutLabel,
   resolveTone,
 } from "../../shared/usage/format";
-import { STATUS_DARK, STATUS_LIGHT, type Palette } from "../../shared/usage/palette";
+import { paceColor, STATUS_DARK, STATUS_LIGHT, type Palette } from "../../shared/usage/palette";
+import { elapsedPct, formatPaceDelta, paceLabel, windowPace } from "../../shared/usage/pace";
 import { listUsage, type UsageSnapshot, type UsageTone, type UsageWindow } from "../../shared/usage/contract";
 import { windowLabel } from "../../shared/usage/window-label";
 
@@ -233,7 +234,7 @@ export function startSidebarMeter(client: PluginClientContext): PluginCleanup {
   let messages: Messages = messagesFor(locale);
   let node: HTMLElement | null = null;
   let snapshot: UsageSnapshot | null = null;
-  let selection: Selection = { keys: [], configured: false };
+  let selection: Selection = { keys: [], configured: false, showPace: true };
   let groups: MeterGroup[] = [];
   let stopped = false;
   let appearance: Appearance | null = null;
@@ -296,7 +297,26 @@ export function startSidebarMeter(client: PluginClientContext): PluginCleanup {
         value.textContent = row.usedPct != null ? formatPct(row.usedPct, locale) : "\u2014";
         value.style.cssText = `color:${labelColor};font-size:11px;font-weight:500;flex-shrink:0;`;
 
-        head.append(label, value);
+        // The head is space-between, so the number and its arrow travel as one
+        // group; appended straight to the head, a third child would be flung to
+        // the opposite edge with the percentage stranded in the middle.
+        const valueGroup = document.createElement("div");
+        valueGroup.style.cssText = "display:flex;align-items:baseline;gap:3px;flex-shrink:0;";
+        valueGroup.append(value);
+        head.append(label, valueGroup);
+
+        // Computed here rather than in recompute(): it is a comparison against
+        // the clock, and paint() runs on the 60-second poll while recompute()
+        // only runs when the snapshot, the pins, or the language change.
+        const pace = selection.showPace ? windowPace(row.window, row.usedPct) : null;
+        if (pace) {
+          const mark = document.createElement("span");
+          mark.textContent = formatPaceDelta(pace, locale);
+          mark.style.cssText = `color:${paceColor(palette, pace.trend)};font-size:11px;font-weight:600;flex-shrink:0;`;
+          // The glyph alone reads as decoration to a screen reader.
+          mark.setAttribute("aria-label", paceLabel(pace, locale, messages));
+          valueGroup.append(mark);
+        }
 
         const track = document.createElement("div");
         track.style.cssText = `height:3px;border-radius:2px;background:${trackColor};overflow:hidden;`;
@@ -305,7 +325,19 @@ export function startSidebarMeter(client: PluginClientContext): PluginCleanup {
         fill.style.cssText = `height:3px;border-radius:2px;width:${clampPct(row.usedPct ?? 0)}%;background:${palette[row.tone]};`;
 
         track.append(fill);
-        item.append(head, track);
+
+        // The tick sits outside the track, which clips its own fill to keep the
+        // rounded ends — and a marker the height of a 3px bar is not a marker.
+        const trackRow = document.createElement("div");
+        trackRow.style.cssText = "position:relative;";
+        trackRow.append(track);
+        if (pace) {
+          // Where the bar would stand if it were tracking the clock exactly.
+          const tick = document.createElement("div");
+          tick.style.cssText = `position:absolute;top:-2px;height:7px;width:2px;border-radius:1px;margin-inline-start:-1px;inset-inline-start:${clampPct(elapsedPct(row.window) ?? 0)}%;background:${paceColor(palette, pace.trend)};`;
+          trackRow.append(tick);
+        }
+        item.append(head, trackRow);
 
         // A percentage alone cannot be acted on: 90% used is fine with a reset an
         // hour out and a problem with three days to go.

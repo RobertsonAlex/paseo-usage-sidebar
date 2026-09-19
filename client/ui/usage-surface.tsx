@@ -24,7 +24,8 @@ import {
   statusLabel,
   windowUsedPct,
 } from "../../shared/usage/format";
-import { paletteForSurface } from "../../shared/usage/palette";
+import { paceColor, paletteForSurface } from "../../shared/usage/palette";
+import { elapsedPct, formatPaceDelta, paceLabel, windowPace, type PaceTrend } from "../../shared/usage/pace";
 import { isRtl, messagesFor, type Locale, type Messages } from "../../shared/i18n/messages";
 import { getLocale, subscribeLocale } from "../i18n/locale";
 import { publishSelection } from "../selection/store";
@@ -74,6 +75,11 @@ function fillColor(theme: PluginTheme, tone: UsageTone | undefined): string {
   return paletteForSurface(theme.colors.surface0)[tone ?? "default"];
 }
 
+/** The pace arrow, off the same ramp the bar under it is painted from. */
+function markColor(theme: PluginTheme, trend: PaceTrend): string {
+  return paceColor(paletteForSurface(theme.colors.surface0), trend);
+}
+
 function useStyles(theme: PluginTheme, compact: boolean, rtl: boolean) {
   const row = rtl ? "row-reverse" : "row";
   const textAlign = rtl ? "right" : "left";
@@ -109,6 +115,10 @@ function useStyles(theme: PluginTheme, compact: boolean, rtl: boolean) {
         /** Fixed slot: the spinner and the icon are not the same size, and a button that resizes mid-refresh reads as a glitch. */
         refreshIcon: { width: 14, height: 14, alignItems: "center", justifyContent: "center" },
         refreshLabel: { color: theme.colors.foregroundMuted, fontSize: FONT.sm, writingDirection },
+        /** Two buttons now share the header's trailing edge, so they need their own row. */
+        headerActions: { flexDirection: row, alignItems: "center", gap: SPACE[1] },
+        headerToggleOn: { backgroundColor: theme.colors.surface2 },
+        headerToggleOnLabel: { color: theme.colors.foreground },
 
         /**
          * The reorder block. Rows are a fixed height so a drag can map a finger
@@ -199,9 +209,19 @@ function useStyles(theme: PluginTheme, compact: boolean, rtl: boolean) {
         iconButtonPressed: { opacity: 0.7 },
         barValue: { color: theme.colors.foreground, fontSize: FONT.sm, fontWeight: "500", writingDirection },
         barReset: { color: theme.colors.foregroundMuted, fontWeight: "normal" },
+        /** Colour is per-reading, so it arrives inline; the weight is what makes the glyph legible at 12px. */
+        barPace: { fontWeight: "600" },
         barAtRisk: { color: theme.colors.statusDanger, fontWeight: "normal" },
         track: { height: 4, borderRadius: 2, backgroundColor: theme.colors.surface2, overflow: "hidden", flexDirection: row },
         fill: { height: 4, borderRadius: 2 },
+        /**
+         * The pace tick rides outside the track rather than inside it: the track
+         * clips its own fill to keep the rounded ends, and a marker the height of
+         * a 4px bar is not a marker. This wrapper is what the tick is absolute to.
+         */
+        trackRow: { position: "relative", justifyContent: "center" },
+        /** Taller than the track on both sides, and pulled half its own width left so it straddles the instant rather than starting at it. */
+        paceMark: { position: "absolute", top: -2, height: 8, width: 2, borderRadius: 1, marginInlineStart: -1 },
 
         details: { gap: SPACE[1] },
         detailRow: { flexDirection: row, justifyContent: "space-between", gap: SPACE[2] },
@@ -236,6 +256,7 @@ function WindowBar({
   locale,
   messages,
   pinned,
+  showPace,
   onTogglePin,
 }: {
   window: UsageWindow;
@@ -244,10 +265,14 @@ function WindowBar({
   locale: Locale;
   messages: Messages;
   pinned?: boolean;
+  showPace: boolean;
   onTogglePin?: () => void;
 }) {
   const usedPct = windowUsedPct(window);
   const tone = resolveTone(window.tone, usedPct);
+  // Read at render rather than memoized: this is a comparison against the clock,
+  // and the panel already re-renders on its own 60-second refetch.
+  const pace = showPace ? windowPace(window, usedPct) : null;
   const atRisk = window.runsOutAt != null && window.shortfallPct != null;
   const trailing = atRisk
     ? formatRunsOutLabel(window.runsOutAt, messages)
@@ -262,6 +287,14 @@ function WindowBar({
         <View style={styles.barValueGroup}>
           <Text style={styles.barValue}>
             {usedPct != null ? formatPct(usedPct, locale) : "—"}
+            {pace ? (
+              <Text
+                accessibilityLabel={paceLabel(pace, locale, messages)}
+                style={[styles.barPace, { color: markColor(theme, pace.trend) }]}
+              >
+                {` ${formatPaceDelta(pace, locale)}`}
+              </Text>
+            ) : null}
             {trailing ? <Text style={atRisk ? styles.barAtRisk : styles.barReset}>{` · ${trailing}`}</Text> : null}
           </Text>
           {onTogglePin ? (
@@ -284,10 +317,21 @@ function WindowBar({
           ) : null}
         </View>
       </View>
-      <View style={styles.track}>
-        <View
-          style={[styles.fill, { width: `${clampPct(usedPct ?? 0)}%`, backgroundColor: fillColor(theme, tone) }]}
-        />
+      <View style={styles.trackRow}>
+        <View style={styles.track}>
+          <View
+            style={[styles.fill, { width: `${clampPct(usedPct ?? 0)}%`, backgroundColor: fillColor(theme, tone) }]}
+          />
+        </View>
+        {/* Where the bar would stand if it were tracking the clock exactly; the gap between it and the fill edge is the arrow's number, drawn. */}
+        {pace ? (
+          <View
+            style={[
+              styles.paceMark,
+              { insetInlineStart: `${clampPct(elapsedPct(window) ?? 0)}%`, backgroundColor: markColor(theme, pace.trend) },
+            ]}
+          />
+        ) : null}
       </View>
     </View>
   );
@@ -632,6 +676,7 @@ function ProviderBlock({
   locale,
   messages,
   pinnedKeys,
+  showPace,
   onTogglePin,
 }: {
   provider: ProviderUsage;
@@ -640,6 +685,7 @@ function ProviderBlock({
   locale: Locale;
   messages: Messages;
   pinnedKeys: ReadonlySet<string>;
+  showPace: boolean;
   onTogglePin: (key: string) => void;
 }) {
   const status = statusLabel(provider.status, messages);
@@ -694,6 +740,7 @@ function ProviderBlock({
               locale={locale}
               messages={messages}
               pinned={pinnedKeys.has(rowKey(provider.providerId, window.id))}
+              showPace={showPace}
               onTogglePin={() => onTogglePin(rowKey(provider.providerId, window.id))}
             />
           ))}
@@ -798,6 +845,9 @@ export function UsageSurface({ theme, layout }: PluginSurfaceProps) {
    */
   const [localOrder, setLocalOrder] = useState<string[] | null>(null);
   const order = localOrder ?? persistedOrder;
+  /** Same local-first rule as the order: the toggle must not wait on a round trip. */
+  const [localShowPace, setLocalShowPace] = useState<boolean | null>(null);
+  const showPace = localShowPace ?? selectionQuery.data?.showPace ?? true;
   const pinnedKeys = useMemo(() => new Set(order), [order]);
 
   const pinned: PinnedRow[] = useMemo(() => {
@@ -812,8 +862,12 @@ export function UsageSurface({ theme, layout }: PluginSurfaceProps) {
     );
   }, [query.data, order, messages]);
 
-  const savePins = useMutation({
-    mutationFn: (keys: string[]) => persistSelection({ keys }),
+  /**
+   * One writer for both settings, each sent on its own: the server merges, so a
+   * reorder never carries the toggle along and a toggle never rewrites the pins.
+   */
+  const saveSelection = useMutation({
+    mutationFn: (input: { keys?: string[]; showPace?: boolean }) => persistSelection(input),
     onSuccess: (selection) => {
       queryClient.setQueryData(["usage-sidebar", "selection"], selection);
       publishSelection(selection);
@@ -822,7 +876,12 @@ export function UsageSurface({ theme, layout }: PluginSurfaceProps) {
 
   const commitOrder = (keys: string[]) => {
     setLocalOrder(keys);
-    savePins.mutate(keys);
+    saveSelection.mutate({ keys });
+  };
+
+  const togglePace = () => {
+    setLocalShowPace(!showPace);
+    saveSelection.mutate({ showPace: !showPace });
   };
 
   const togglePin = (key: string) => {
@@ -837,6 +896,27 @@ export function UsageSurface({ theme, layout }: PluginSurfaceProps) {
         <View style={styles.column}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionHeaderTitle}>{messages.title}</Text>
+          <View style={styles.headerActions}>
+          <Pressable
+            accessibilityRole="switch"
+            accessibilityState={{ checked: showPace }}
+            accessibilityLabel={showPace ? messages.hidePace : messages.showPace}
+            onPress={togglePace}
+            style={({ pressed }) => [
+              styles.refreshButton,
+              showPace ? styles.headerToggleOn : null,
+              pressed ? styles.refreshButtonPressed : null,
+            ]}
+          >
+            <View style={styles.refreshIcon}>
+              <Icon
+                name="TrendingUp"
+                size={14}
+                color={showPace ? theme.colors.foreground : theme.colors.foregroundMuted}
+              />
+            </View>
+            <Text style={[styles.refreshLabel, showPace ? styles.headerToggleOnLabel : null]}>{messages.pace}</Text>
+          </Pressable>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={refreshing ? messages.refreshing : messages.refresh}
@@ -854,6 +934,7 @@ export function UsageSurface({ theme, layout }: PluginSurfaceProps) {
             {/* The label never changes: swapping it for "Refreshing..." resizes the button under the cursor. */}
             <Text style={styles.refreshLabel}>{messages.refresh}</Text>
           </Pressable>
+          </View>
         </View>
 
         {query.isPending ? (
@@ -908,6 +989,7 @@ export function UsageSurface({ theme, layout }: PluginSurfaceProps) {
                   locale={locale}
                   messages={messages}
                   pinnedKeys={pinnedKeys}
+                  showPace={showPace}
                   onTogglePin={togglePin}
                 />
               </Fragment>
