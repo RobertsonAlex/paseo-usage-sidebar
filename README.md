@@ -29,7 +29,8 @@ sidebar or run **Open plan usage** from the Command Center (`Cmd`/`Ctrl` + `K`).
 
 ## The usage panel
 
-Same layout as **Settings → Usage**: one bordered card, one row per provider.
+Same layout as **Settings → Usage**: one bordered card, one row per provider — headed by whose plan it
+is and which plan it is, `Claude (you@example.com)` on the left and `Max 20x` on the right.
 
 | Row | Shows |
 | --- | --- |
@@ -44,6 +45,29 @@ Two things differ from the settings screen. Rows lead with the provider's name r
 because brand icons live in a host-internal registry plugins cannot import. And the bars use this
 plugin's own [colour ramp](#colour) rather than the host's status tokens.
 
+The account is the one part of the row Paseo does not report: its payload carries the plan but not
+whose plan it is, so the address is read from the provider CLI's own login file — `~/.claude.json`
+for Claude, the `id_token` in `~/.codex/auth.json` for Codex. Read-only, and only the address; the
+tokens beside it are never touched. A provider that keeps its account somewhere else simply shows no
+address.
+
+Knowing the account also collapses duplicates: a subscription reports the same numbers wherever it is
+signed in, so two providers resolving to one account render as one block instead of the same reading
+twice. Rows whose account cannot be read are never folded together — unknown is not one account.
+
+That holds across machines too. Paseo's client can hold several daemons at once, and each runs its own
+copy of this plugin, so a subscription signed in here and on a second PC used to paint itself twice in
+one sidebar. The copies cannot see each other through the daemon — nothing in `provider.usage.list`
+has a host dimension — but their client bundles all run in the same renderer, so they claim accounts
+through it: the first copy to poll paints the shared subscription and the others paint nothing for it.
+
+The claim is a lease. Only a poll that came back with numbers renews it, and teardown releases it
+outright; a copy repaints between polls, because the countdowns tick against the clock, but repainting
+only asks whether it still holds the account. So a machine whose daemon goes unreachable goes quiet
+after one lease and the other takes over, rather than holding a frozen block forever by failing at it.
+A host still on an older build does not take part, and keeps painting its duplicate until you update
+it.
+
 Window names are rebuilt from the daemon's ids instead of passed through, so they follow your
 language and say what period they cover: the daemon calls the 5-hour window `Session`, and spells
 the model-scoped one `Weekly · Fable` in English only.
@@ -57,6 +81,11 @@ the model-scoped one `Weekly · Fable` in English only.
 One row per pinned window, directly under the sidebar entry: label, percentage and its
 [pace](#pace) arrow, a thin bar marked with where the clock stands, and the reset. Same 60-second
 cycle, no click needed.
+
+Rows are grouped under the provider and the account they count against — `Claude · you@example.com`.
+The address is last because it is the first thing the ellipsis eats: at this width the provider name
+is what makes the rows beneath it legible, and the address is what tells two plans apart once you
+already know the name.
 
 <p align="center">
   <img src="images/sidebar-meter.png" alt="The sidebar meter on the Light theme" width="320">
@@ -200,6 +229,11 @@ window shape this plugin does not model degrades to a missing field rather than 
 surface. Each provider row's footer shows that provider's own source label and how long ago the
 numbers were fetched.
 
+`server/usage/account.ts` adds the one field the response does not carry — whose plan it is — and uses
+it to drop rows that repeat an account already shown. The login files it reads are cached for ten
+minutes: `~/.claude.json` also holds your per-project history and grows into the megabytes, and the
+address inside changes about as often as you log in.
+
 Percentages, and their refresh cadence, are the daemon's. The plugin re-derives and estimates
 nothing, so a provider that rate-limits its own usage endpoint stays stale until Paseo refreshes it.
 
@@ -209,12 +243,17 @@ Paseo plugins are unsandboxed by design, so this is worth reading before you tru
 
 - **Server code** runs in a daemon subprocess and calls exactly one SDK method,
   `paseo.providers.listUsage()`. No other daemon operation, no sockets of its own.
-- **No credentials** are read, stored, or transmitted. The plugin never touches `~/.claude`,
-  `~/.codex`, the macOS Keychain, or any provider token.
+- **No credentials** are read, stored, or transmitted. Two login files are opened read-only for the
+  account address alone — `oauthAccount.emailAddress` in `~/.claude.json`, and the `email` claim of
+  the `id_token` in `~/.codex/auth.json`. No access or refresh token is read, and the macOS Keychain
+  is never queried. The address is rendered in the panel and goes nowhere else.
 - **No outbound network access.** Nothing leaves the machine; the plugin opens no sockets at all.
-- **One write, and it is yours** — the pin set and pace toggle described above. No config is touched, no daemon
-  state is mutated.
-- **Client code** renders the response and stores nothing.
+- **One write, and it is yours** — the pin set and pace toggle described above. No config is
+  touched, no daemon state is mutated.
+- **Client code** renders the response and persists nothing. Its one piece of shared state is the
+  account claim (`client/usage/claims.ts`): an in-memory map on the renderer's `globalThis`, holding
+  the same addresses already shown on screen, so that two machines' copies of this plugin do not both
+  paint one subscription. It never leaves the renderer and never reaches disk.
 
 ## Project structure
 
@@ -228,13 +267,18 @@ Paseo plugins are unsandboxed by design, so this is worth reading before you tru
 ├── client/
 │   ├── i18n/locale.ts              # Mirrors Paseo's own resolveSupportedLocale
 │   ├── selection/store.ts          # In-renderer store keeping panel and meter in sync
+│   ├── usage/claims.ts             # One block per account across hosts, claimed in the renderer
+│   ├── usage/claims.check.ts       # Its self-check — handover, renewal, expiry
 │   └── ui/
 │       ├── usage-surface.tsx       # The usage panel
 │       ├── sidebar-meter.ts        # The always-visible DOM meter
 │       └── sidebar-title.ts        # Localized sidebar / Command Center label
 ├── server/
 │   ├── selection/state.ts          # Atomic pin-set persistence under XDG state
-│   └── usage/read.ts               # paseo.providers.listUsage(), validated
+│   └── usage/
+│       ├── read.ts                 # paseo.providers.listUsage(), validated
+│       ├── account.ts              # Plan owner from the CLI login files, and per-account dedupe
+│       └── account.check.ts        # Its self-check — login-file parsing and the dedupe rule
 └── shared/
     ├── i18n/messages.ts            # Message catalog for the nine locales Paseo ships
     ├── selection/contract.ts       # Pin-set schema, RPCs, and snapshot resolution
@@ -266,7 +310,11 @@ code, `@getpaseo/plugin/server` for server code.
 ```bash
 npm install
 npm run typecheck
-npx tsx shared/usage/pace.check.ts   # asserts for the pace arithmetic; no test runner in this repo
+
+# Asserts, no test runner. Run the check next to whatever you touched.
+npx tsx shared/usage/pace.check.ts      # the pace arithmetic
+npx tsx server/usage/account.check.ts   # login-file parsing, per-account dedupe
+npx tsx client/usage/claims.check.ts    # which copy paints a shared subscription
 
 paseo plugin install "$PWD"
 paseo plugin reload usage-sidebar   # after editing source
@@ -286,9 +334,9 @@ an optional `!`, then a lower-case subject with no trailing period. A `!` must c
 `git config core.hooksPath .githooks` to install it without `npm install`, and
 `git commit --no-verify` to skip it.
 
-Issues and pull requests are welcome. Please run `npm run typecheck` before opening one — plus
-`npx tsx shared/usage/pace.check.ts` if you touch `shared/usage/pace.ts` — and keep new modules
-inside the `client/` / `server/` / `shared/` layout above.
+Issues and pull requests are welcome. Please run `npm run typecheck` before opening one — plus the
+`*.check.ts` sitting beside anything you touched — and keep new modules inside the `client/` /
+`server/` / `shared/` layout above.
 
 ## License
 

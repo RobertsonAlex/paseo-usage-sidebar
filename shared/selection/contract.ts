@@ -56,6 +56,8 @@ export type PinnedRow = {
   key: string;
   providerId: string;
   providerName: string;
+  /** Whose plan the row is counting against, when it could be read. */
+  accountLabel: string | null;
   label: string;
   usedPct: number | null;
   window: UsageWindow;
@@ -98,6 +100,7 @@ export function pinnedRows(
       key,
       providerId: provider.providerId,
       providerName: provider.displayName,
+      accountLabel: provider.accountLabel,
       label: labelFor(provider, window, messages),
       usedPct: window.usedPct ?? (window.remainingPct != null ? 100 - window.remainingPct : null),
       window,

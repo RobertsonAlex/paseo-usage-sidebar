@@ -42,6 +42,12 @@ export const ProviderUsageSchema = z.object({
   displayName: z.string(),
   status: UsageStatusSchema,
   planLabel: z.string().nullable().default(null),
+  /**
+   * The account the plan belongs to. Not part of the daemon's payload — the
+   * server half fills it in from the provider CLI's own login file (see
+   * server/usage/account.ts), so it is optional and absent is normal.
+   */
+  accountLabel: z.string().nullable().default(null),
   sourceLabel: z.string().nullable().optional(),
   fetchedAt: z.string().nullable().optional(),
   nextRefreshAt: z.string().nullable().optional(),

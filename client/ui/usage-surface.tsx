@@ -29,6 +29,7 @@ import { elapsedPct, formatPaceDelta, paceLabel, windowPace, type PaceTrend } fr
 import { isRtl, messagesFor, type Locale, type Messages } from "../../shared/i18n/messages";
 import { getLocale, subscribeLocale } from "../i18n/locale";
 import { publishSelection } from "../selection/store";
+import { claimAccounts } from "../usage/claims";
 import {
   defaultKeys,
   pinnedRows,
@@ -168,6 +169,8 @@ function useStyles(theme: PluginTheme, compact: boolean, rtl: boolean) {
         provider: { gap: SPACE[4], paddingVertical: SPACE[4], paddingHorizontal: SPACE[4] },
         providerHeader: { flexDirection: row, alignItems: "center", gap: SPACE[2] },
         providerName: { flexShrink: 1, color: theme.colors.foreground, fontSize: FONT.base, writingDirection, textAlign },
+        /** Shrinks before the provider name does: the name is the identifier, the address is the qualifier. */
+        providerAccount: { flexShrink: 2, color: theme.colors.foregroundMuted, fontSize: FONT.sm, writingDirection, textAlign },
         headerSpacer: { flex: 1 },
         planBadge: {
           paddingHorizontal: SPACE[2],
@@ -702,6 +705,12 @@ function ProviderBlock({
         <Text style={styles.providerName} numberOfLines={1}>
           {provider.displayName}
         </Text>
+        {provider.accountLabel ? (
+          <Text style={styles.providerAccount} numberOfLines={1}>
+            {`(${provider.accountLabel})`}
+          </Text>
+        ) : null}
+        <View style={styles.headerSpacer} />
         {provider.planLabel ? (
           <View style={styles.planBadge}>
             <Text style={styles.planBadgeLabel} numberOfLines={1}>
@@ -709,7 +718,6 @@ function ProviderBlock({
             </Text>
           </View>
         ) : null}
-        <View style={styles.headerSpacer} />
         {status ? (
           <View style={styles.statusRow}>
             <View
@@ -807,7 +815,15 @@ export function UsageSurface({ theme, layout }: PluginSurfaceProps) {
 
   const query = useQuery<UsageSnapshot>({
     queryKey: ["usage-sidebar", "snapshot"],
-    queryFn: () => fetchUsage({}),
+    queryFn: async () => {
+      const snapshot = await fetchUsage({});
+      // The panel is a place you go to look, so it never renders itself blank:
+      // if every account it could show is held by another host's copy of this
+      // plugin, it shows them all rather than an empty card. Only the meter —
+      // which is ambient, and where the duplicate is actually noise — hides.
+      const claimed = claimAccounts(snapshot);
+      return claimed.providers.length > 0 ? claimed : snapshot;
+    },
     refetchInterval: REFRESH_INTERVAL_MS,
     staleTime: STALE_TIME_MS,
   });

@@ -1,5 +1,6 @@
 import type { PluginHandlerContext } from "@getpaseo/plugin/server";
 import { UsageSnapshotSchema, type UsageSnapshot } from "../../shared/usage/contract";
+import { withAccounts } from "./account";
 
 /**
  * Paseo 0.8 exposes provider usage through the plugin SDK, and the manifest
@@ -31,5 +32,9 @@ export async function readUsage(
   _input: Record<string, never>,
   context: PluginHandlerContext,
 ): Promise<UsageSnapshot> {
-  return normalize(await context.paseo.providers.listUsage());
+  // The account owner is stitched on here rather than in the surface because it
+  // comes off the filesystem, which only this half of the plugin can reach — and
+  // because collapsing the duplicate rows it identifies has to happen before the
+  // panel and the sidebar meter each resolve the same snapshot.
+  return withAccounts(normalize(await context.paseo.providers.listUsage()));
 }

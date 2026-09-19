@@ -3,6 +3,7 @@ import type { PluginClientContext } from "@getpaseo/plugin/client";
 import { messagesFor, type Locale, type Messages } from "../../shared/i18n/messages";
 import { getLocale, subscribeLocale } from "../i18n/locale";
 import { publishSelection, subscribeSelection } from "../selection/store";
+import { claimAccounts, heldAccounts } from "../usage/claims";
 import { pinnedRows, readSelection, type Selection } from "../../shared/selection/contract";
 import {
   clampPct,
@@ -173,7 +174,7 @@ function readAppearance(): Appearance | null {
 }
 
 type MeterRow = { label: string; usedPct: number | null; tone: UsageTone; window: UsageWindow };
-type MeterGroup = { provider: string; rows: MeterRow[] };
+type MeterGroup = { provider: string; account: string | null; rows: MeterRow[] };
 
 type RowTiming = { text: string | null; atRisk: boolean; alternate: string | null };
 
@@ -212,10 +213,13 @@ function toGroups(snapshot: UsageSnapshot, selection: Selection, messages: Messa
       window: row.window,
     };
     const last = groups[groups.length - 1];
-    if (last && last.provider === row.providerName) {
+    // Both halves of the heading decide the grouping, not just the name: two
+    // accounts on one provider are two plans with two sets of windows, and a
+    // heading that named one of them would be counting the other's rows.
+    if (last && last.provider === row.providerName && last.account === row.accountLabel) {
       last.rows.push(entry);
     } else {
-      groups.push({ provider: row.providerName, rows: [entry] });
+      groups.push({ provider: row.providerName, account: row.accountLabel, rows: [entry] });
     }
   }
   return groups;
@@ -253,7 +257,9 @@ export function startSidebarMeter(client: PluginClientContext): PluginCleanup {
   }
 
   function recompute(): void {
-    groups = snapshot ? toGroups(snapshot, selection, messages) : [];
+    // Re-asked rather than remembered: the claim can lapse between polls, and a
+    // copy that lost it has to stop painting the block the other machine now owns.
+    groups = snapshot ? toGroups(heldAccounts(snapshot), selection, messages) : [];
   }
 
   function paint(): void {
@@ -267,6 +273,10 @@ export function startSidebarMeter(client: PluginClientContext): PluginCleanup {
     };
 
     node.textContent = "";
+    // An empty flex column still occupies its own margins, which under a sidebar
+    // row reads as a gap nobody asked for. `none` rather than removing the node:
+    // the MutationObserver would see the removal and mount it straight back.
+    node.style.display = groups.length === 0 ? "none" : "flex";
     if (groups.length === 0) {
       return;
     }
@@ -280,6 +290,17 @@ export function startSidebarMeter(client: PluginClientContext): PluginCleanup {
       const provider = document.createElement("div");
       provider.textContent = group.provider;
       provider.style.cssText = `color:${labelColor};font-size:10px;font-weight:600;letter-spacing:0.04em;opacity:0.75;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;`;
+      if (group.account) {
+        // Trailing, and the first thing the ellipsis eats: at this width the
+        // provider name is what makes the rows under it legible, and the address
+        // is what tells two plans apart once you already know the name. Dropped
+        // back to normal weight and no letter-spacing — the heading's tracking is
+        // for a short label, and an email wearing it reads as shouting.
+        const account = document.createElement("span");
+        account.textContent = ` · ${group.account}`;
+        account.style.cssText = "font-weight:400;letter-spacing:0;opacity:0.85;";
+        provider.append(account);
+      }
       section.append(provider);
 
       for (const row of group.rows) {
@@ -402,14 +423,20 @@ export function startSidebarMeter(client: PluginClientContext): PluginCleanup {
 
   async function refresh(): Promise<void> {
     try {
-      snapshot = (await client.rpc(listUsage, {})) as UsageSnapshot;
+      // Claimed rather than shown outright: with a second machine connected, both
+      // copies of this plugin paint into the same sidebar, and only one of them
+      // should paint a shared subscription. See client/usage/claims.ts.
+      snapshot = claimAccounts((await client.rpc(listUsage, {})) as UsageSnapshot);
       recompute();
       ensureMounted();
       syncAppearance();
       paint();
     } catch {
       // Keep the last snapshot, but still repaint: the countdowns are relative to
-      // now, so they have to keep ticking through a failed poll.
+      // now, so they have to keep ticking through a failed poll. Recomputed, not
+      // just repainted — a poll that keeps failing is how a claim lapses, and
+      // this is the only place that notices.
+      recompute();
       paint();
     }
   }

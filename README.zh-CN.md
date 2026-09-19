@@ -27,7 +27,8 @@ paseo plugin add RUIIIOVO/paseo-usage-sidebar
 
 ## 用量面板
 
-排版与 **设置 → Usage** 一致：一张带边框的卡片，每个服务商一行。
+排版与 **设置 → Usage** 一致：一张带边框的卡片，每个服务商一行——行头左边是这是谁的套餐，`Claude
+(you@example.com)`，右边是哪一档套餐，`Max 20x`。
 
 | 行类型 | 显示内容 |
 | --- | --- |
@@ -41,6 +42,23 @@ paseo plugin add RUIIIOVO/paseo-usage-sidebar
 与设置页有两处不同。每行以服务商名称而非图标开头，因为品牌图标存放在宿主内部的注册表里，插件引用不到；
 进度条则使用插件自己的[色阶](#配色)，而不是宿主的 status token。
 
+账号是行头里 Paseo 不上报的那一部分：它的负载带了套餐，但没带这是谁的套餐，所以邮箱直接从服务商 CLI 自己的
+登录文件读取——Claude 读 `~/.claude.json`，Codex 读 `~/.codex/auth.json` 里的 `id_token`。只读，而且只取
+邮箱；旁边的 token 从不碰。把账号存在别处的服务商就不显示邮箱。
+
+知道账号也能合并重复项：同一份订阅无论在哪里登录，上报的数字都是同一份，所以解析到同一账号的两个服务商只渲染
+成一块，而不是把同一个读数画两遍。读不到账号的行从不合并——未知不等于同一个账号。
+
+跨机器也一样。Paseo 客户端可以同时连着多个守护进程，每个都跑着自己的一份本插件，于是同一份订阅在本机和第二台
+PC 上各登录一次，过去就会在同一条侧边栏里画两遍。这些副本通过守护进程看不到彼此——`provider.usage.list` 里
+没有任何机器维度——但它们的客户端 bundle 都跑在同一个渲染进程里，所以它们在渲染进程里认领账号：先轮询到的那
+一份画这份共享订阅，其余的不画。
+
+认领是租约。只有真正取回数字的那次轮询才会续期，卸载时则直接释放；副本在两次轮询之间也会重绘，因为倒计时是跟
+着时钟走的，但重绘只问「我是否还持有这个账号」。所以某台机器的守护进程失联后，它会在一个租约之后安静下来，由
+另一台接手，而不是靠「一直失败」把一块冻住的数字永远攥在手里。还停留在旧版插件的主机不参与认领，在你升级它之
+前会继续画自己那份重复的。
+
 窗口名称不是直接透传，而是从守护进程的 id 重建的，因此既跟随你的语言，也说得清覆盖的周期：守护进程把
 5 小时窗口叫 `Session`，模型维度的窗口则写成 `Weekly · Fable` 且只有英文。
 
@@ -52,6 +70,9 @@ paseo plugin add RUIIIOVO/paseo-usage-sidebar
 
 侧边栏条目正下方，每个被固定的窗口占一行：名称、百分比及其[节奏](#节奏)箭头、一条标出时间走到哪里的
 细进度条，以及重置信息。与面板同为 60 秒刷新周期，无需任何点击。
+
+这些行按服务商和它们所计入的账号分组——`Claude · you@example.com`。邮箱放在后面，因为它是省略号最先吃掉的
+部分：在这个宽度下，服务商名称才是让下面那几行读得懂的东西，而邮箱是你已经知道名称之后用来区分两份套餐的。
 
 <p align="center">
   <img src="images/sidebar-meter.png" alt="Light 主题下的侧边栏仪表" width="320">
@@ -171,6 +192,10 @@ Paseo 不会把语言设置传给插件，所以插件复刻了 Paseo 自己的 
 `provider.usage.list` Zod 镜像校验返回值，因此某个服务商上报了本插件未建模的窗口结构时，退化为缺一个
 字段，而不是整个界面崩掉。每个服务商行的页脚会显示该服务商自己的来源标签，以及数字是多久之前取的。
 
+`server/usage/account.ts` 补上返回值里没有的那一个字段——这是谁的套餐——并据此丢掉重复展示同一账号的行。它读
+的登录文件会缓存十分钟：`~/.claude.json` 里还存着你的逐项目历史，在老装机上能涨到几 MB，而里面那个邮箱的变动
+频率和你重新登录的频率差不多。
+
 百分比及其刷新节奏都是守护进程的。插件不做任何二次推导或估算，所以如果某个服务商对自己的用量接口限流，
 数字会一直是旧的，直到 Paseo 刷新它。
 
@@ -180,11 +205,14 @@ Paseo 插件在设计上就没有沙箱，所以在信任任何一个插件之�
 
 - **服务端代码** 运行在守护进程的子进程里，只调用一个 SDK 方法 `paseo.providers.listUsage()`。不做任何
   其他守护进程操作，也不自己开 socket。
-- **不读取、不存储、不传输任何凭据。** 插件从不碰 `~/.claude`、`~/.codex`、macOS 钥匙串或任何服务商
-  token。
+- **不读取、不存储、不传输任何凭据。** 只以只读方式打开两个登录文件，且只取账号邮箱——`~/.claude.json` 的
+  `oauthAccount.emailAddress`，以及 `~/.codex/auth.json` 里 `id_token` 的 `email` claim。不读取任何
+  access / refresh token，也从不查询 macOS 钥匙串。邮箱只渲染在面板里，不发往任何地方。
 - **无出网行为。** 没有任何数据离开本机；插件根本不打开任何 socket。
 - **只写一个文件，而且是你自己的**——上面说的固定集合和节奏开关。不改配置，不改守护进程状态。
-- **客户端代码** 只负责渲染返回值，不存任何东西。
+- **客户端代码** 只负责渲染返回值，不做任何持久化。它唯一的共享状态是账号认领
+  （`client/usage/claims.ts`）：渲染进程 `globalThis` 上的一张内存表，存的就是屏幕上已经显示着的那些邮箱，
+  用来让两台机器上的副本不把同一份订阅画两遍。它不出渲染进程，也从不落盘。
 
 ## 项目结构
 
@@ -198,13 +226,18 @@ Paseo 插件在设计上就没有沙箱，所以在信任任何一个插件之�
 ├── client/
 │   ├── i18n/locale.ts              # 复刻 Paseo 自己的 resolveSupportedLocale
 │   ├── selection/store.ts          # 渲染进程内的 store，让面板与仪表保持同步
+│   ├── usage/claims.ts             # 跨主机按账号只留一块，在渲染进程里认领
+│   ├── usage/claims.check.ts       # 它的自检——交接、续期、过期
 │   └── ui/
 │       ├── usage-surface.tsx       # 用量面板
 │       ├── sidebar-meter.ts        # 常驻的 DOM 迷你仪表
 │       └── sidebar-title.ts        # 已本地化的侧边栏 / 命令中心标题
 ├── server/
 │   ├── selection/state.ts          # XDG state 下固定集合的原子化持久化
-│   └── usage/read.ts               # paseo.providers.listUsage()，带校验
+│   └── usage/
+│       ├── read.ts                 # paseo.providers.listUsage()，带校验
+│       ├── account.ts              # 从 CLI 登录文件取套餐归属，并按账号去重
+│       └── account.check.ts        # 它的自检——登录文件解析与去重规则
 └── shared/
     ├── i18n/messages.ts            # Paseo 支持的九种语言的文案表
     ├── selection/contract.ts       # 固定集合的 schema、RPC 与快照对齐逻辑
@@ -235,7 +268,11 @@ SDK 的引入路径遵循同样的划分：`@getpaseo/plugin` 提供运行时无
 ```bash
 npm install
 npm run typecheck
-npx tsx shared/usage/pace.check.ts   # 节奏算术的断言自检；本仓库没有测试框架
+
+# 断言自检，本仓库没有测试框架。改了哪块就跑哪块旁边的那个。
+npx tsx shared/usage/pace.check.ts      # 节奏算术
+npx tsx server/usage/account.check.ts   # 登录文件解析、按账号去重
+npx tsx client/usage/claims.check.ts    # 共享订阅由哪一份副本来画
 
 paseo plugin install "$PWD"
 paseo plugin reload usage-sidebar   # 改完源码后
@@ -253,8 +290,8 @@ paseo plugin logs usage-sidebar
 脚注，反之亦然。它是一个无任何依赖的 POSIX shell 脚本——不跑 `npm install` 的话，执行
 `git config core.hooksPath .githooks` 即可启用；`git commit --no-verify` 可以跳过它。
 
-欢迎提 issue 和 PR。提交前请先跑 `npm run typecheck`；如果改动了 `shared/usage/pace.ts`，再跑一次
-`npx tsx shared/usage/pace.check.ts`。并把新模块放在上面的 `client/` / `server/` / `shared/` 布局之内。
+欢迎提 issue 和 PR。提交前请先跑 `npm run typecheck`，再跑一遍你改动的那些模块旁边的 `*.check.ts`。并把
+新模块放在上面的 `client/` / `server/` / `shared/` 布局之内。
 
 ## 许可
 

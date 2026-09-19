@@ -4,6 +4,7 @@ import { subscribeLocale } from "./client/i18n/locale";
 import { startSidebarMeter } from "./client/ui/sidebar-meter";
 import { sidebarTitle } from "./client/ui/sidebar-title";
 import { UsageSurface } from "./client/ui/usage-surface";
+import { releaseAccounts } from "./client/usage/claims";
 
 const SURFACE_ID = "usage";
 
@@ -73,5 +74,7 @@ export default function contribute(client: PluginClientContext): PluginCleanup {
     stopMeter();
     removeLabels();
     removeSurface();
+    // Last, and unconditional: another host's copy is waiting on these.
+    releaseAccounts();
   };
 }
