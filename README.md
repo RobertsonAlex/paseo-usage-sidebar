@@ -87,6 +87,10 @@ The address is last because it is the first thing the ellipsis eats: at this wid
 is what makes the rows beneath it legible, and the address is what tells two plans apart once you
 already know the name.
 
+Each heading is also a fold. Click it — or press Enter or Space with it focused — to hide that
+account's rows; the caret on the trailing edge tracks the state. The fold lives in the renderer
+only: it survives the 60-second repaint and a sidebar remount, not a reload.
+
 <p align="center">
   <img src="images/sidebar-meter.png" alt="The sidebar meter on the Light theme" width="320">
   <img src="images/sidebar-meter-dark.png" alt="The sidebar meter on the Dark theme" width="320">
@@ -124,7 +128,8 @@ because desktop and web clients evaluate plugin client bundles in the same rende
   seconds, so a theme switch lands without a reload. Row-sized painted ancestors are skipped —
   Paseo tints its own sidebar row while the panel is open, and reading that tint identified the
   Light theme and turned the meter dark-on-dark.
-- **Never steals a click.** The node is `pointer-events:none`.
+- **Takes only the clicks it asks for.** The node is `pointer-events:none`; the account headings
+  opt back in so they can be folded, and so do rows carrying a reset tooltip.
 
 To disable it, remove the `startSidebarMeter(client)` call from `index.client.tsx`. There is no
 settings toggle yet.

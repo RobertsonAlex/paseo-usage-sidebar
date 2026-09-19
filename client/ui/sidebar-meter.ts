@@ -225,6 +225,11 @@ function toGroups(snapshot: UsageSnapshot, selection: Selection, messages: Messa
   return groups;
 }
 
+/** Both halves, because both halves decide the grouping in toGroups(). */
+function groupKey(group: MeterGroup): string {
+  return `${group.provider} ${group.account ?? ""}`;
+}
+
 export function startSidebarMeter(client: PluginClientContext): PluginCleanup {
   if (typeof document === "undefined" || typeof MutationObserver === "undefined") {
     return () => {};
@@ -240,6 +245,10 @@ export function startSidebarMeter(client: PluginClientContext): PluginCleanup {
   let snapshot: UsageSnapshot | null = null;
   let selection: Selection = { keys: [], configured: false, showPace: true };
   let groups: MeterGroup[] = [];
+  // Folded headings, by group key. Client-side and unpersisted on purpose: paint()
+  // rebuilds the block from scratch on every poll, so the fold has to outlive the
+  // nodes it applies to — but not the session.
+  const folded = new Set<string>();
   let stopped = false;
   let appearance: Appearance | null = null;
 
@@ -287,9 +296,37 @@ export function startSidebarMeter(client: PluginClientContext): PluginCleanup {
       const section = document.createElement("div");
       section.style.cssText = "display:flex;flex-direction:column;gap:8px;";
 
+      const key = groupKey(group);
+      const open = !folded.has(key);
+
       const provider = document.createElement("div");
-      provider.textContent = group.provider;
-      provider.style.cssText = `color:${labelColor};font-size:10px;font-weight:600;letter-spacing:0.04em;opacity:0.75;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;`;
+      // The whole block is click-through, so a heading that folds has to opt back
+      // in — and say so, both to the eye (the caret) and to a screen reader.
+      provider.style.cssText = `color:${labelColor};font-size:10px;font-weight:600;letter-spacing:0.04em;opacity:0.75;display:flex;align-items:baseline;gap:6px;pointer-events:auto;cursor:pointer;user-select:none;`;
+      provider.setAttribute("role", "button");
+      provider.setAttribute("tabindex", "0");
+      provider.setAttribute("aria-expanded", open ? "true" : "false");
+      const toggle = () => {
+        if (folded.has(key)) {
+          folded.delete(key);
+        } else {
+          folded.add(key);
+        }
+        paint();
+      };
+      provider.onclick = toggle;
+      provider.onkeydown = (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          toggle();
+        }
+      };
+
+      // The name takes the slack so the caret keeps the trailing edge, and the
+      // ellipsis stays on the text rather than eating the affordance.
+      const heading = document.createElement("span");
+      heading.textContent = group.provider;
+      heading.style.cssText = "flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;";
       if (group.account) {
         // Trailing, and the first thing the ellipsis eats: at this width the
         // provider name is what makes the rows under it legible, and the address
@@ -299,11 +336,18 @@ export function startSidebarMeter(client: PluginClientContext): PluginCleanup {
         const account = document.createElement("span");
         account.textContent = ` · ${group.account}`;
         account.style.cssText = "font-weight:400;letter-spacing:0;opacity:0.85;";
-        provider.append(account);
+        heading.append(account);
       }
+
+      // Vertical glyphs only: a sideways caret points the wrong way in Arabic.
+      const caret = document.createElement("span");
+      caret.textContent = open ? "▴" : "▾";
+      caret.style.cssText = "font-weight:400;letter-spacing:0;flex-shrink:0;";
+      caret.setAttribute("aria-hidden", "true");
+      provider.append(heading, caret);
       section.append(provider);
 
-      for (const row of group.rows) {
+      for (const row of open ? group.rows : []) {
         const item = document.createElement("div");
         item.style.cssText = "display:flex;flex-direction:column;gap:3px;";
 
