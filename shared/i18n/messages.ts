@@ -66,6 +66,8 @@ export type Messages = {
   paceBehind: (points: string) => string;
   /** The pin list could not be written, so the arrangement on screen was rolled back. */
   pinSaveFailed: string;
+  /** The pace toggle could not be written, so it was flipped back. */
+  paceSaveFailed: string;
 };
 
 const en: Messages = {
@@ -110,6 +112,7 @@ const en: Messages = {
   paceAhead: (points) => `${points} points ahead of pace`,
   paceBehind: (points) => `${points} points behind pace`,
   pinSaveFailed: "Could not save the sidebar arrangement. Your change was undone.",
+  paceSaveFailed: "Could not save the pace setting. Your change was undone.",
 };
 
 const zhCN: Messages = {
@@ -156,6 +159,7 @@ const zhCN: Messages = {
   paceAhead: (points) => `超出时间进度 ${points} 个百分点`,
   paceBehind: (points) => `落后时间进度 ${points} 个百分点`,
   pinSaveFailed: "无法保存侧边栏排列，已撤销此次更改。",
+  paceSaveFailed: "无法保存节奏设置，已撤销此次更改。",
 };
 
 const ja: Messages = {
@@ -200,6 +204,7 @@ const ja: Messages = {
   paceAhead: (points) => `ペースより ${points} ポイント多い`,
   paceBehind: (points) => `ペースより ${points} ポイント少ない`,
   pinSaveFailed: "サイドバーの配置を保存できませんでした。変更は取り消されました。",
+  paceSaveFailed: "ペースの設定を保存できませんでした。変更は取り消されました。",
 };
 
 const ko: Messages = {
@@ -244,6 +249,7 @@ const ko: Messages = {
   paceAhead: (points) => `기준보다 ${points}포인트 빠름`,
   paceBehind: (points) => `기준보다 ${points}포인트 느림`,
   pinSaveFailed: "사이드바 배치를 저장하지 못했습니다. 변경 사항이 취소되었습니다.",
+  paceSaveFailed: "속도 설정을 저장하지 못했습니다. 변경 사항이 취소되었습니다.",
 };
 
 const es: Messages = {
@@ -288,6 +294,7 @@ const es: Messages = {
   paceAhead: (points) => `${points} puntos por encima del ritmo`,
   paceBehind: (points) => `${points} puntos por debajo del ritmo`,
   pinSaveFailed: "No se pudo guardar la disposición de la barra lateral. Se deshizo el cambio.",
+  paceSaveFailed: "No se pudo guardar el ajuste de ritmo. Se deshizo el cambio.",
 };
 
 const fr: Messages = {
@@ -332,6 +339,7 @@ const fr: Messages = {
   paceAhead: (points) => `${points} points au-dessus du rythme`,
   paceBehind: (points) => `${points} points en dessous du rythme`,
   pinSaveFailed: "Impossible d'enregistrer la disposition de la barre latérale. La modification a été annulée.",
+  paceSaveFailed: "Impossible d'enregistrer le réglage du rythme. La modification a été annulée.",
 };
 
 const ptBR: Messages = {
@@ -376,6 +384,7 @@ const ptBR: Messages = {
   paceAhead: (points) => `${points} pontos acima do ritmo`,
   paceBehind: (points) => `${points} pontos abaixo do ritmo`,
   pinSaveFailed: "Não foi possível salvar a disposição da barra lateral. A alteração foi desfeita.",
+  paceSaveFailed: "Não foi possível salvar a configuração de ritmo. A alteração foi desfeita.",
 };
 
 const ru: Messages = {
@@ -420,6 +429,7 @@ const ru: Messages = {
   paceAhead: (points) => `на ${points} п. п. выше темпа`,
   paceBehind: (points) => `на ${points} п. п. ниже темпа`,
   pinSaveFailed: "Не удалось сохранить расположение на боковой панели. Изменение отменено.",
+  paceSaveFailed: "Не удалось сохранить настройку темпа. Изменение отменено.",
 };
 
 const ar: Messages = {
@@ -464,6 +474,7 @@ const ar: Messages = {
   paceAhead: (points) => `${points} نقطة فوق الوتيرة`,
   paceBehind: (points) => `${points} نقطة دون الوتيرة`,
   pinSaveFailed: "تعذّر حفظ ترتيب الشريط الجانبي. تم التراجع عن التغيير.",
+  paceSaveFailed: "تعذّر حفظ إعداد الوتيرة. تم التراجع عن التغيير.",
 };
 
 export const MESSAGES: Record<Locale, Messages> = {

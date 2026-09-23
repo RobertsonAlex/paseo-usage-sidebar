@@ -971,6 +971,17 @@ export function UsageSurface({ theme, layout }: PluginSurfaceProps) {
     saveSelection.mutate({ showPace: !showPace });
   };
 
+  /**
+   * One mutation writes both settings, so the error has to say which one it
+   * undid — and sit beside the control that changed back, not under the order
+   * block, which a pace toggle never touched.
+   */
+  const failedWrite = saveSelection.isError
+    ? saveSelection.variables?.showPace !== undefined
+      ? "pace"
+      : "pins"
+    : null;
+
   const togglePin = (key: string) => {
     // Appended, not inserted: a newly pinned row joins the end of the arrangement
     // instead of displacing one the user placed deliberately.
@@ -1023,6 +1034,7 @@ export function UsageSurface({ theme, layout }: PluginSurfaceProps) {
           </Pressable>
           </View>
         </View>
+        {failedWrite === "pace" ? <Text style={styles.orderError}>{messages.paceSaveFailed}</Text> : null}
 
         {query.isPending ? (
           <View style={[styles.card, styles.stateCard]}>
@@ -1070,7 +1082,7 @@ export function UsageSurface({ theme, layout }: PluginSurfaceProps) {
               onReorder={(visible) => commitOrder(reorderVisible(order, visible))}
               onRemove={togglePin}
             />
-            {saveSelection.isError ? <Text style={styles.orderError}>{messages.pinSaveFailed}</Text> : null}
+            {failedWrite === "pins" ? <Text style={styles.orderError}>{messages.pinSaveFailed}</Text> : null}
           </View>
         ) : null}
 
