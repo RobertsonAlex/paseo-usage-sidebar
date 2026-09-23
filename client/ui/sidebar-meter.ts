@@ -228,7 +228,7 @@ function toGroups(snapshot: UsageSnapshot, selection: Selection, messages: Messa
 
 /** Both halves, because both halves decide the grouping in toGroups(). */
 function groupKey(group: MeterGroup): string {
-  return `${group.provider} ${group.account ?? ""}`;
+  return `${group.provider}\u0000${group.account ?? ""}`;
 }
 
 export function startSidebarMeter(client: PluginClientContext): PluginCleanup {
