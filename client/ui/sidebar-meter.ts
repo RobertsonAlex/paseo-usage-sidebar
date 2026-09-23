@@ -15,6 +15,7 @@ import {
 } from "../../shared/usage/format";
 import { paceColor, STATUS_DARK, STATUS_LIGHT, type Palette } from "../../shared/usage/palette";
 import { elapsedPct, formatPaceDelta, paceLabel, windowPace } from "../../shared/usage/pace";
+import { isMeterStale } from "../../shared/usage/errors";
 import { listUsage, type UsageSnapshot, type UsageTone, type UsageWindow } from "../../shared/usage/contract";
 import { windowLabel } from "../../shared/usage/window-label";
 
@@ -251,6 +252,8 @@ export function startSidebarMeter(client: PluginClientContext): PluginCleanup {
   const folded = new Set<string>();
   let stopped = false;
   let appearance: Appearance | null = null;
+  /** Drives `isMeterStale`; reset by any poll that lands. */
+  let consecutiveFailures = 0;
 
   /** Repaints only when the measured colours actually changed. */
   function syncAppearance(): boolean {
@@ -289,6 +292,14 @@ export function startSidebarMeter(client: PluginClientContext): PluginCleanup {
     if (groups.length === 0) {
       return;
     }
+
+    /**
+     * The block has no room for a sentence, and the countdowns keep ticking
+     * through a failed poll, so without this the meter looks live while showing
+     * numbers that stopped moving. Fading it is the whole signal the space
+     * allows; the panel carries the explanation and the fix.
+     */
+    node.style.opacity = isMeterStale(consecutiveFailures, groups.length) ? "0.45" : "1";
 
     for (const group of groups) {
       // Rows are three lines tall now (label, bar, countdown), so they need more
@@ -471,15 +482,18 @@ export function startSidebarMeter(client: PluginClientContext): PluginCleanup {
       // copies of this plugin paint into the same sidebar, and only one of them
       // should paint a shared subscription. See client/usage/claims.ts.
       snapshot = claimAccounts((await client.rpc(listUsage, {})) as UsageSnapshot);
+      consecutiveFailures = 0;
       recompute();
       ensureMounted();
       syncAppearance();
       paint();
     } catch {
       // Keep the last snapshot, but still repaint: the countdowns are relative to
-      // now, so they have to keep ticking through a failed poll. Recomputed, not
+      // now, so they have to keep ticking through a failed poll — and past the
+      // second failure the repaint is also what fades the block. Recomputed, not
       // just repainted — a poll that keeps failing is how a claim lapses, and
       // this is the only place that notices.
+      consecutiveFailures += 1;
       recompute();
       paint();
     }
