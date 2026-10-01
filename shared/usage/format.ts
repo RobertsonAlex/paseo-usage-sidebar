@@ -86,7 +86,9 @@ export function formatResetLabel(iso: string | null | undefined, messages: Messa
   if (!Number.isFinite(deltaMs)) {
     return null;
   }
-  if (deltaMs <= 0) {
+  // Under a minute the countdown would floor to "0m", which reads as a
+  // contradiction next to a reset that has not happened yet.
+  if (deltaMs < 60_000) {
     return messages.resettingNow;
   }
   const duration = compactDuration(deltaMs, messages);
@@ -112,6 +114,26 @@ export function formatResetPrimary(
     return formatResetLabel(iso, messages);
   }
   return remaining >= DAY_MS ? formatResetClock(iso, locale, messages) : formatResetLabel(iso, messages);
+}
+
+/**
+ * A window's primary reset line.
+ *
+ * Claude reports `resets_at: null` for a session window that has not started —
+ * nothing has been sent since the last one lapsed, so there is no instant yet.
+ * Printing nothing there reads as missing data; say the clock is idle instead.
+ * Only a 0% window qualifies: a provider that simply never reports reset times
+ * must not be told its usage "starts on next use".
+ */
+export function formatWindowReset(
+  window: UsageWindow,
+  locale: Locale,
+  messages: Messages,
+): string | null {
+  if (!window.resetsAt && windowUsedPct(window) === 0) {
+    return messages.idleWindow;
+  }
+  return formatResetPrimary(window.resetsAt, locale, messages);
 }
 
 /** The other half of the pair, for a tooltip: whichever form the row did not print. */
