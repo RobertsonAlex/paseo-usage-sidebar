@@ -182,7 +182,6 @@ function useStyles(theme: PluginTheme, compact: boolean, rtl: boolean) {
         providerHeader: { flexDirection: row, alignItems: "center", gap: SPACE[2] },
         providerName: { flexShrink: 1, color: theme.colors.foreground, fontSize: FONT.base, writingDirection, textAlign },
         /** Shrinks before the provider name does: the name is the identifier, the address is the qualifier. */
-        providerAccount: { flexShrink: 2, color: theme.colors.foregroundMuted, fontSize: FONT.sm, writingDirection, textAlign },
         headerSpacer: { flex: 1 },
         planBadge: {
           paddingHorizontal: SPACE[2],
@@ -750,11 +749,6 @@ function ProviderBlock({
         <Text style={styles.providerName} numberOfLines={1}>
           {provider.displayName}
         </Text>
-        {provider.accountLabel ? (
-          <Text style={styles.providerAccount} numberOfLines={1}>
-            {`(${provider.accountLabel})`}
-          </Text>
-        ) : null}
         <View style={styles.headerSpacer} />
         {provider.planLabel ? (
           <View style={styles.planBadge}>

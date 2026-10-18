@@ -339,17 +339,6 @@ export function startSidebarMeter(client: PluginClientContext): PluginCleanup {
       const heading = document.createElement("span");
       heading.textContent = group.provider;
       heading.style.cssText = "flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;";
-      if (group.account) {
-        // Trailing, and the first thing the ellipsis eats: at this width the
-        // provider name is what makes the rows under it legible, and the address
-        // is what tells two plans apart once you already know the name. Dropped
-        // back to normal weight and no letter-spacing — the heading's tracking is
-        // for a short label, and an email wearing it reads as shouting.
-        const account = document.createElement("span");
-        account.textContent = ` · ${group.account}`;
-        account.style.cssText = "font-weight:400;letter-spacing:0;opacity:0.85;";
-        heading.append(account);
-      }
 
       // Vertical glyphs only: a sideways caret points the wrong way in Arabic.
       const caret = document.createElement("span");

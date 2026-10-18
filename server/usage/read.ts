@@ -92,10 +92,8 @@ export async function readUsage(
     if (fault) {
       throw fault;
     }
-    // The account owner is stitched on here rather than in the surface because it
-    // comes off the filesystem, which only this half of the plugin can reach — and
-    // because collapsing the duplicate rows it identifies has to happen before the
-    // panel and the sidebar meter each resolve the same snapshot.
+    // Collapsing duplicate accounts has to happen before the panel and the sidebar
+    // meter each resolve the same snapshot.
     const snapshot = withAccounts(normalize(await context.paseo.providers.listUsage()));
     // A reading got through, so whatever the last failures were, they were not
     // this session ending.
