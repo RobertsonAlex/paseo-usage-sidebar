@@ -448,9 +448,19 @@ export function startSidebarMeter(client: PluginClientContext): PluginCleanup {
     if (stopped) {
       return;
     }
-    const anchor = document.querySelector(ANCHOR_SELECTOR);
-    const parent = anchor?.parentElement;
-    if (!anchor || !parent) {
+    const pressable = document.querySelector(ANCHOR_SELECTOR);
+    if (!pressable) {
+      return;
+    }
+    // Since Paseo 0.11 the testID sits on the row's inner Pressable, inside a
+    // horizontal wrapper; mount after the outermost row-direction ancestor so the
+    // meter stacks under the row instead of beside the label.
+    let anchor: Element = pressable;
+    while (anchor.parentElement && getComputedStyle(anchor.parentElement).flexDirection.startsWith("row")) {
+      anchor = anchor.parentElement;
+    }
+    const parent = anchor.parentElement;
+    if (!parent) {
       return;
     }
     if (node && node.parentElement === parent) {
@@ -460,7 +470,7 @@ export function startSidebarMeter(client: PluginClientContext): PluginCleanup {
 
     const created = document.createElement("div");
     created.setAttribute(NODE_MARK, "true");
-    const anchorStyle = getComputedStyle(anchor);
+    const anchorStyle = getComputedStyle(pressable);
     created.style.cssText = [
       "display:flex",
       "flex-direction:column",
