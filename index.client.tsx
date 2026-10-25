@@ -1,5 +1,6 @@
 import type { PluginCleanup } from "@getpaseo/plugin";
-import type { PluginClientContext } from "@getpaseo/plugin/client";
+import type { PluginClientContext, PluginSidebarItemProps } from "@getpaseo/plugin/client";
+import { SidebarRow } from "@getpaseo/plugin/client/ui";
 import { subscribeLocale } from "./client/i18n/locale";
 import { startSidebarMeter } from "./client/ui/sidebar-meter";
 import { sidebarTitle } from "./client/ui/sidebar-title";
@@ -7,6 +8,17 @@ import { UsageSurface } from "./client/ui/usage-surface";
 import { releaseAccounts } from "./client/usage/claims";
 
 const SURFACE_ID = "usage";
+
+/** Renders with the item's id, so the meter's `plugin-sidebar-usage-sidebar-usage` anchor still matches. */
+function SidebarItem({ currentScreen, openScreen }: PluginSidebarItemProps) {
+  return (
+    <SidebarRow
+      icon="Gauge"
+      active={currentScreen?.screenId === SURFACE_ID}
+      onPress={() => openScreen({ screenId: SURFACE_ID })}
+    />
+  );
+}
 
 /**
  * The two host registrations that carry a *string* label rather than a component.
@@ -18,11 +30,10 @@ const SURFACE_ID = "usage";
 function registerLabels(client: PluginClientContext): PluginCleanup {
   const title = sidebarTitle();
   const removers = [
-    client.addSidebarItem({
-      id: "usage",
+    client.addSidebarHeaderItem({
+      id: SURFACE_ID,
       title,
-      icon: "Gauge",
-      surface: SURFACE_ID,
+      Component: SidebarItem,
     }),
     client.addCommandCenterItem({
       id: "open-usage",
@@ -33,7 +44,7 @@ function registerLabels(client: PluginClientContext): PluginCleanup {
       icon: "Gauge",
       context: "global",
       onSelect: (context) => {
-        context.openSurface(SURFACE_ID);
+        context.openScreen({ screenId: SURFACE_ID });
       },
     }),
   ];
@@ -54,7 +65,8 @@ function registerLabels(client: PluginClientContext): PluginCleanup {
  * started inline and its teardown folded into the returned cleanup.
  */
 export default function contribute(client: PluginClientContext): PluginCleanup {
-  const removeSurface = client.addSurface(SURFACE_ID, UsageSurface);
+  // A title function re-runs when the language changes, so the screen needs no re-registration.
+  const removeSurface = client.addScreen({ id: SURFACE_ID, title: () => sidebarTitle(), Component: UsageSurface });
   let removeLabels = registerLabels(client);
 
   // Only fires on an actual change of resolved locale, so the re-registration —
