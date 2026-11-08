@@ -1,5 +1,5 @@
 import type { PluginTheme } from "@getpaseo/plugin";
-import { useRpc, type PluginSurfaceProps } from "@getpaseo/plugin/client";
+import { useRpc, type PluginScreenProps } from "@getpaseo/plugin/client";
 import { Icon } from "@getpaseo/plugin/client/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import React, { Fragment, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
@@ -907,7 +907,7 @@ function useLocale(platform: "ios" | "android" | "web"): Locale {
   return useSyncExternalStore(subscribe, snapshot, snapshot);
 }
 
-export function UsageSurface({ theme, layout }: PluginSurfaceProps) {
+export function UsageSurface({ theme, layout }: PluginScreenProps) {
   const locale = useLocale(layout.platform);
   const messages = useMemo(() => messagesFor(locale), [locale]);
   const styles = useStyles(theme, layout.compact, isRtl(locale));

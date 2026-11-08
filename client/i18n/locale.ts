@@ -80,7 +80,7 @@ function isLocale(value: string): value is Locale {
 }
 
 /**
- * `platform` comes from PluginSurfaceProps.layout: browser globals only exist on web.
+ * `platform` comes from PluginScreenProps.layout: browser globals only exist on web.
  * `override` lets a caller pin a locale explicitly.
  */
 export function resolveLocale(platform: "ios" | "android" | "web", override?: string | null): Locale {
