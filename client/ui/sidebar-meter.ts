@@ -363,11 +363,11 @@ export function startSidebarMeter(client: PluginClientContext, surfaceId: string
       body.setAttribute("role", "button");
       body.setAttribute("tabindex", "0");
       body.setAttribute("aria-label", messages.title);
-      body.onclick = () => client.openSurface(surfaceId);
+      body.onclick = () => client.openScreen({ screenId: surfaceId });
       body.onkeydown = (event) => {
         if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
-          client.openSurface(surfaceId);
+          client.openScreen({ screenId: surfaceId });
         }
       };
       if (open && group.rows.length > 0) {
