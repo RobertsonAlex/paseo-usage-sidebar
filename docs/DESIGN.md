@@ -53,8 +53,8 @@ Each heading is also a fold. Click it — or press Enter or Space with it focuse
 account's rows; the caret on the trailing edge tracks the state. The fold lives in the renderer
 only: it survives the 60-second repaint and a sidebar remount, not a reload.
 
-The meter node is otherwise `pointer-events:none`, so it never steals a click meant for the sidebar.
-The account headings opt back in so they can be folded, and so do rows carrying a reset tooltip.
+The meter is drawn by the plugin's own sidebar item, under its row, so it moves and hides with that
+item in Settings > Sidebar. A heading only folds; the rows beneath it open the usage panel.
 
 ## Pace
 

@@ -24,9 +24,9 @@
 
 ## ✨ Features
 
-- 📊 **Pinned Mini Meters**: Compact progress bars embedded right below the sidebar item for effortless quota monitoring without page switching. *(Desktop and web only; the panel works everywhere.)*
+- 📊 **Pinned Mini Meters**: Compact progress bars right below the sidebar item for effortless quota monitoring without page switching, on desktop, web, and the mobile app alike.
 - 🔍 **Expandable Detail Panel**: One-click access to a dashboard showing provider quotas, reset schedules, balances, and status.
-- ⚡ **Zero Setup & Live Sync**: Refreshes every 60 seconds, and on demand from **Refresh**—no manual API key entry or configuration.
+- ⚡ **Zero Setup & Live Sync**: Refreshes every 60 seconds while the meter or the panel is on screen (one poll for both, paused while the window is hidden), and on demand from **Refresh**—no manual API key entry or configuration.
 - 🎛️ **Pin, Hide & Reorder**: Choose exactly which quota windows live in the sidebar, and drag them into the order you want.
 - 📈 **Pace Against the Clock**: `57% ▲12%` means twelve points ahead of a window only 45% elapsed; a tick on the bar marks where the clock stands. Green behind, orange 1–5 points ahead, red past that.
 - 👤 **Whose Plan It Is**: Each provider is headed by its account — `Claude (you@example.com)` — and a subscription signed in on two providers, or two connected machines, renders once instead of twice.
@@ -49,7 +49,7 @@ The account address is the one thing Paseo does not report, so it is read — th
 
 ## 🚀 Quick Start
 
-> Requires **Paseo 0.8.0 or later**. Paseo 0.7 and earlier cannot load this plugin.
+> Requires **Paseo 0.14.0 or later**. For older Paseo versions use plugin version 1.1.x.
 
 ### Installation
 
