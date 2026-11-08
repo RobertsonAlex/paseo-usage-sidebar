@@ -1,9 +1,8 @@
 import type { PluginCleanup } from "@getpaseo/plugin";
 import type { PluginClientContext, PluginSidebarItemProps } from "@getpaseo/plugin/client";
 import { SidebarRow } from "@getpaseo/plugin/client/ui";
-import { subscribeLocale } from "./client/i18n/locale";
+import { titles } from "./client/i18n/titles";
 import { startSidebarMeter } from "./client/ui/sidebar-meter";
-import { sidebarTitle } from "./client/ui/sidebar-title";
 import { UsageSurface } from "./client/ui/usage-surface";
 import { releaseAccounts } from "./client/usage/claims";
 
@@ -21,20 +20,17 @@ function SidebarItem({ currentScreen, openScreen }: PluginSidebarItemProps) {
 }
 
 /**
- * The two host registrations that carry a *string* label rather than a component.
+ * Client entry: the screen, its sidebar row, the Command Center shortcut, and
+ * the sidebar meter.
  *
- * Everything else in this plugin re-renders or repaints from the live locale, but
- * these hand Paseo a fixed string, so the only way to change the language they
- * show is to withdraw the registration and make it again.
+ * The labels Paseo renders are message references, so the app follows a
+ * language change itself and nothing here re-registers.
  */
-function registerLabels(client: PluginClientContext): PluginCleanup {
-  const title = sidebarTitle();
+export default function contribute(client: PluginClientContext): PluginCleanup {
+  const title = titles.message("title");
   const removers = [
-    client.addSidebarHeaderItem({
-      id: SURFACE_ID,
-      title,
-      Component: SidebarItem,
-    }),
+    client.addScreen({ id: SURFACE_ID, title, Component: UsageSurface }),
+    client.addSidebarHeaderItem({ id: SURFACE_ID, title, Component: SidebarItem }),
     client.addCommandCenterItem({
       id: "open-usage",
       title,
@@ -48,44 +44,16 @@ function registerLabels(client: PluginClientContext): PluginCleanup {
       },
     }),
   ];
-  return () => {
-    for (const remove of removers) {
-      remove();
-    }
-  };
-}
-
-/**
- * Client entry: the surface, its sidebar row, the Command Center shortcut, and
- * the sidebar meter.
- *
- * The meter used to be registered through `plugin.addClientSide(startSidebarMeter)`.
- * 0.8 drops that wrapper because this entry *is* the client callback — it already
- * receives a `PluginClientContext` and returns a cleanup — so the meter is
- * started inline and its teardown folded into the returned cleanup.
- */
-export default function contribute(client: PluginClientContext): PluginCleanup {
-  // A title function re-runs when the language changes, so the screen needs no re-registration.
-  const removeSurface = client.addScreen({ id: SURFACE_ID, title: () => sidebarTitle(), Component: UsageSurface });
-  let removeLabels = registerLabels(client);
-
-  // Only fires on an actual change of resolved locale, so the re-registration —
-  // the one thing here that visibly reshuffles host state — costs nothing while
-  // the language is left alone.
-  const stopWatchingLocale = subscribeLocale(() => {
-    removeLabels();
-    removeLabels = registerLabels(client);
-  });
 
   const stopMeter = startSidebarMeter(client, SURFACE_ID);
 
   // The removers are idempotent, so running them here is safe even though Paseo
   // also drops outstanding registrations after this cleanup returns.
   return () => {
-    stopWatchingLocale();
     stopMeter();
-    removeLabels();
-    removeSurface();
+    for (const remove of removers) {
+      remove();
+    }
     // Last, and unconditional: another host's copy is waiting on these.
     releaseAccounts();
   };
