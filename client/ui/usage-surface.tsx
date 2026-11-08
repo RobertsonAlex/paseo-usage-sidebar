@@ -1,8 +1,8 @@
 import type { PluginTheme } from "@getpaseo/plugin";
 import { useRpc, type PluginScreenProps } from "@getpaseo/plugin/client";
 import { Icon } from "@getpaseo/plugin/client/ui";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import React, { Fragment, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import React, { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -31,32 +31,26 @@ import { paceColor, paletteForSurface } from "../../shared/usage/palette";
 import { formatPaceDelta, paceLabel, paceMarkPct, windowPace, type PaceTrend } from "../../shared/usage/pace";
 import { errorMessage, panelFailureView } from "../../shared/usage/errors";
 import { isRtl, messagesFor, type Locale, type Messages } from "../../shared/i18n/messages";
-import { getLocale, subscribeLocale } from "../i18n/locale";
+import { useLocale } from "../i18n/locale";
 import { publishSelection } from "../selection/store";
-import { claimAccounts } from "../usage/claims";
+import { heldAccounts } from "../usage/claims";
+import { SELECTION_KEY, useSelectionQuery, useUsageSnapshot } from "../usage/queries";
 import { PinButton } from "./pin-button";
 import {
   defaultKeys,
   pinnedRows,
-  readSelection,
   reorderVisible,
   rowKey,
   writeSelection,
   type PinnedRow,
-  type Selection,
 } from "../../shared/selection/contract";
 import { windowLabel } from "../../shared/usage/window-label";
 import {
-  listUsage,
   type ProviderUsage,
   type UsageBalance,
-  type UsageSnapshot,
   type UsageTone,
   type UsageWindow,
 } from "../../shared/usage/contract";
-
-const REFRESH_INTERVAL_MS = 60_000;
-const STALE_TIME_MS = 30_000;
 
 /** Paseo's design tokens, inlined because the plugin theme only exposes colors. */
 const SPACE = { 1: 4, 1.5: 6, 2: 8, 3: 12, 4: 16, 6: 24 } as const;
@@ -891,57 +885,31 @@ function ProviderBlock({
   );
 }
 
-/**
- * Paseo's language setting, as a subscription rather than a one-time read: the
- * panel stays open across a language change, so resolving once at mount left it
- * in the old language until it was closed and reopened.
- */
-function useLocale(platform: "ios" | "android" | "web"): Locale {
-  const subscribe = useCallback(
-    (onChange: () => void) => (platform === "web" ? subscribeLocale(onChange) : () => {}),
-    [platform],
-  );
-  const snapshot = useCallback(() => getLocale(platform), [platform]);
-  // Server snapshot: the plugin host renders on the client only, but React
-  // requires the third argument whenever a bundle may be hydrated.
-  return useSyncExternalStore(subscribe, snapshot, snapshot);
-}
-
 export function UsageSurface({ theme, layout }: PluginScreenProps) {
   const locale = useLocale(layout.platform);
   const messages = useMemo(() => messagesFor(locale), [locale]);
   const styles = useStyles(theme, layout.compact, isRtl(locale));
-  const fetchUsage = useRpc(listUsage);
-  const fetchSelection = useRpc(readSelection);
   const persistSelection = useRpc(writeSelection);
 
-  const query = useQuery<UsageSnapshot>({
-    queryKey: ["usage-sidebar", "snapshot"],
-    queryFn: async () => {
-      const snapshot = await fetchUsage({});
-      // The panel is a place you go to look, so it never renders itself blank:
-      // if every account it could show is held by another host's copy of this
-      // plugin, it shows them all rather than an empty card. Only the meter —
-      // which is ambient, and where the duplicate is actually noise — hides.
-      const claimed = claimAccounts(snapshot);
-      return claimed.providers.length > 0 ? claimed : snapshot;
-    },
-    refetchInterval: REFRESH_INTERVAL_MS,
-    staleTime: STALE_TIME_MS,
-  });
+  const query = useUsageSnapshot();
+  /**
+   * The panel is a place you go to look, so it never renders itself blank: if
+   * every account it could show is held by another host's copy of this plugin,
+   * it shows them all rather than an empty card. Only the meter — which is
+   * ambient, and where the duplicate is actually noise — hides.
+   */
+  const snapshot = useMemo(() => {
+    if (!query.data) {
+      return undefined;
+    }
+    const held = heldAccounts(query.data);
+    return held.providers.length > 0 ? held : query.data;
+  }, [query.data]);
 
   const queryClient = useQueryClient();
-  const selectionQuery = useQuery<Selection>({
-    queryKey: ["usage-sidebar", "selection"],
-    queryFn: async () => {
-      const selection = await fetchSelection({});
-      publishSelection(selection);
-      return selection;
-    },
-    staleTime: Number.POSITIVE_INFINITY,
-  });
+  const selectionQuery = useSelectionQuery();
 
-  const providers = query.data?.providers ?? [];
+  const providers = snapshot?.providers ?? [];
   const refreshing = useBusy(query.isFetching);
 
   /**
@@ -964,8 +932,8 @@ export function UsageSurface({ theme, layout }: PluginScreenProps) {
     if (selection?.configured) {
       return selection.keys;
     }
-    return query.data ? defaultKeys(query.data) : [];
-  }, [selectionQuery.data, query.data]);
+    return snapshot ? defaultKeys(snapshot) : [];
+  }, [selectionQuery.data, snapshot]);
 
   /**
    * An edit takes effect locally first and stays authoritative afterwards: the
@@ -982,16 +950,16 @@ export function UsageSurface({ theme, layout }: PluginScreenProps) {
   const pinnedKeys = useMemo(() => new Set(order), [order]);
 
   const pinned: PinnedRow[] = useMemo(() => {
-    if (!query.data) {
+    if (!snapshot) {
       return [];
     }
     return pinnedRows(
-      query.data,
+      snapshot,
       { keys: order, configured: true },
       (_provider, window) => windowLabel(window, messages),
       messages,
     );
-  }, [query.data, order, messages]);
+  }, [snapshot, order, messages]);
 
   /**
    * One writer for every setting, each sent on its own: the server merges, so a
@@ -1000,7 +968,7 @@ export function UsageSurface({ theme, layout }: PluginScreenProps) {
   const saveSelection = useMutation({
     mutationFn: (input: { keys?: string[]; showPace?: boolean; displayAs?: DisplayMode }) => persistSelection(input),
     onSuccess: (selection) => {
-      queryClient.setQueryData(["usage-sidebar", "selection"], selection);
+      queryClient.setQueryData(SELECTION_KEY, selection);
       publishSelection(selection);
     },
     /**
@@ -1128,7 +1096,8 @@ export function UsageSurface({ theme, layout }: PluginScreenProps) {
             </Text>
             {/* A dropped session or a host setting cannot be retried into working,
                 so offering the button would just be a way to fail again. The
-                60s poll still re-checks, so turning usage back on recovers. */}
+                poll still re-checks (every 5 minutes while usage is off, and on reopen),
+                so turning usage back on recovers. */}
             {failure.showRetry ? (
               <Pressable accessibilityRole="button" style={styles.retryButton} onPress={() => void query.refetch()}>
                 <Text style={styles.retryLabel}>{messages.retry}</Text>

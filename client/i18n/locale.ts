@@ -1,3 +1,4 @@
+import { useCallback, useSyncExternalStore } from "react";
 import { DEFAULT_LOCALE, SUPPORTED_LOCALES, type Locale } from "../../shared/i18n/messages";
 
 /**
@@ -179,4 +180,20 @@ export function subscribeLocale(listener: (locale: Locale) => void): () => void 
       window.removeEventListener("storage", check);
     }
   };
+}
+
+/**
+ * Paseo's language setting, as a subscription rather than a one-time read: the
+ * panel stays open across a language change, so resolving once at mount left it
+ * in the old language until it was closed and reopened.
+ */
+export function useLocale(platform: "ios" | "android" | "web"): Locale {
+  const subscribe = useCallback(
+    (onChange: () => void) => (platform === "web" ? subscribeLocale(onChange) : () => {}),
+    [platform],
+  );
+  const snapshot = useCallback(() => getLocale(platform), [platform]);
+  // Server snapshot: the plugin host renders on the client only, but React
+  // requires the third argument whenever a bundle may be hydrated.
+  return useSyncExternalStore(subscribe, snapshot, snapshot);
 }

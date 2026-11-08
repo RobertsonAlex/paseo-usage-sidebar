@@ -11,8 +11,7 @@ import type { UsageSnapshot } from "../../shared/usage/contract";
  * reading twice.
  *
  * The renderer is the one place the copies meet — every client bundle is
- * evaluated in it, which is also what lets sidebar-meter.ts touch the DOM at all
- * — so the claim lives on `globalThis`. Each copy claims the accounts it is
+ * evaluated in it — so the claim lives on `globalThis`. Each copy claims the accounts it is
  * painting; a copy that finds an account already held renders nothing for it.
  *
  * The key is versioned because the copies are not the same build: one host

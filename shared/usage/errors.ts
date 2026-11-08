@@ -141,6 +141,49 @@ export function isMeterStale(consecutiveFailures: number, rowCount: number): boo
   return consecutiveFailures >= STALE_AFTER_FAILURES && rowCount > 0;
 }
 
+/** While the host has usage switched off, re-check rarely so turning it back on still recovers. */
+export const DISABLED_RECHECK_MS = 5 * 60_000;
+
+/**
+ * Whether a poll tick should go out: not while nobody can see the result (a
+ * hidden tab or window), and only every DISABLED_RECHECK_MS while the host has
+ * usage switched off. `last` is the query cache's state for the snapshot.
+ */
+export function shouldPoll(
+  last: { status: string; error: unknown; errorUpdatedAt: number } | undefined,
+  hidden: boolean,
+  now: number,
+): boolean {
+  if (hidden) {
+    return false;
+  }
+  const disabled = last?.status === "error" && isUsageDisabled(last.error);
+  return !disabled || now - (last?.errorUpdatedAt ?? 0) >= DISABLED_RECHECK_MS;
+}
+
+/** Where the error count stood at the last poll that landed. */
+export type PollTally = { dataUpdatedAt: number; errorsAtSuccess: number };
+
+/**
+ * Consecutive failed polls, from the query cache's running totals: errors since
+ * the data last changed hands. Counts polls, not attempts — the cache bumps
+ * `errorUpdateCount` once a poll has spent its retries. A cache seen for the
+ * first time with data in it is taken as having just landed.
+ */
+export function countFailedPolls(
+  tally: PollTally | null,
+  counts: { dataUpdatedAt: number; errorUpdateCount: number },
+): { tally: PollTally; failures: number } {
+  const next =
+    tally && tally.dataUpdatedAt === counts.dataUpdatedAt
+      ? tally
+      : {
+          dataUpdatedAt: counts.dataUpdatedAt,
+          errorsAtSuccess: tally === null && counts.dataUpdatedAt === 0 ? 0 : counts.errorUpdateCount,
+        };
+  return { tally: next, failures: counts.errorUpdateCount - next.errorsAtSuccess };
+}
+
 export type PanelFailureView = {
   /** Show the localized dropped-session guidance instead of the host's text. */
   linkLost: boolean;

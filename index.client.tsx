@@ -2,26 +2,26 @@ import type { PluginCleanup } from "@getpaseo/plugin";
 import type { PluginClientContext, PluginSidebarItemProps } from "@getpaseo/plugin/client";
 import { SidebarRow } from "@getpaseo/plugin/client/ui";
 import { titles } from "./client/i18n/titles";
-import { startSidebarMeter } from "./client/ui/sidebar-meter";
+import { SidebarMeter } from "./client/ui/sidebar-meter";
 import { UsageSurface } from "./client/ui/usage-surface";
 import { releaseAccounts } from "./client/usage/claims";
 
 const SURFACE_ID = "usage";
 
-/** Renders with the item's id, so the meter's `plugin-sidebar-usage-sidebar-usage` anchor still matches. */
-function SidebarItem({ currentScreen, openScreen }: PluginSidebarItemProps) {
+/** The row that opens the screen, with the meter under it; the item moves and hides as one block. */
+function SidebarItem({ theme, layout, currentScreen, openScreen }: PluginSidebarItemProps) {
+  const open = () => openScreen({ screenId: SURFACE_ID });
   return (
-    <SidebarRow
-      icon="Gauge"
-      active={currentScreen?.screenId === SURFACE_ID}
-      onPress={() => openScreen({ screenId: SURFACE_ID })}
-    />
+    <>
+      <SidebarRow icon="Gauge" active={currentScreen?.screenId === SURFACE_ID} onPress={open} />
+      <SidebarMeter theme={theme} layout={layout} onOpen={open} />
+    </>
   );
 }
 
 /**
- * Client entry: the screen, its sidebar row, the Command Center shortcut, and
- * the sidebar meter.
+ * Client entry: the screen, its sidebar row and meter, and the Command Center
+ * shortcut.
  *
  * The labels Paseo renders are message references, so the app follows a
  * language change itself and nothing here re-registers.
@@ -45,12 +45,9 @@ export default function contribute(client: PluginClientContext): PluginCleanup {
     }),
   ];
 
-  const stopMeter = startSidebarMeter(client, SURFACE_ID);
-
   // The removers are idempotent, so running them here is safe even though Paseo
   // also drops outstanding registrations after this cleanup returns.
   return () => {
-    stopMeter();
     for (const remove of removers) {
       remove();
     }

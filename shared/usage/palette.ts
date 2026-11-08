@@ -3,8 +3,8 @@ import type { PaceTrend } from "./pace";
 
 /**
  * The one place bar colours are defined. Both surfaces that paint a bar — the
- * panel (React, inside a themed surface) and the sidebar meter (a raw DOM node
- * that probes its colours) — read from here, because the two had drifted: the
+ * panel and the sidebar meter, both React Native views on the host theme —
+ * read from here, because the two had drifted: the
  * meter carried its own literals and the panel derived most of its fills from
  * host theme tokens, so a change to one silently disagreed with the other.
  *
