@@ -26,6 +26,7 @@ export type Messages = {
    */
   linkLostTitle: string;
   linkLostBody: string;
+  usageDisabled: string;
   /** Marks readings that are still on screen but are no longer being refreshed. */
   stale: string;
   unavailable: string;
@@ -85,6 +86,7 @@ const en: Messages = {
   retry: "Try again",
   linkLostTitle: "Reload the plugin",
   linkLostBody: "The session with the Paseo daemon ended. Reload the plugin to reconnect \u2014 the app itself is up to date.",
+  usageDisabled: "Usage is off in this host's settings.",
   stale: "Not updating",
   unavailable: "Unavailable",
   error: "Error",
@@ -131,6 +133,7 @@ const zhCN: Messages = {
   retry: "重试",
   linkLostTitle: "请重新加载插件",
   linkLostBody: "与 Paseo 守护进程的连接已断开。重新加载插件即可恢复，应用本身无需更新。",
+  usageDisabled: "此主机的设置中已关闭用量。",
   stale: "已停止更新",
   unavailable: "不可用",
   error: "错误",
@@ -179,6 +182,7 @@ const ja: Messages = {
   retry: "再試行",
   linkLostTitle: "プラグインを再読み込みしてください",
   linkLostBody: "Paseo デーモンとの接続が切断されました。プラグインを再読み込みすると復旧します。アプリ本体の更新は不要です。",
+  usageDisabled: "このホストの設定で使用量がオフになっています。",
   stale: "更新停止中",
   unavailable: "利用不可",
   error: "エラー",
@@ -225,6 +229,7 @@ const ko: Messages = {
   retry: "다시 시도",
   linkLostTitle: "플러그인을 다시 로드하세요",
   linkLostBody: "Paseo 데몬과의 연결이 끊어졌습니다. 플러그인을 다시 로드하면 복구됩니다. 앱 자체는 업데이트할 필요가 없습니다.",
+  usageDisabled: "이 호스트의 설정에서 사용량이 꺼져 있습니다.",
   stale: "업데이트 중지됨",
   unavailable: "사용 불가",
   error: "오류",
@@ -271,6 +276,7 @@ const es: Messages = {
   retry: "Reintentar",
   linkLostTitle: "Vuelve a cargar el complemento",
   linkLostBody: "La sesión con el daemon de Paseo terminó. Vuelve a cargar el complemento para reconectar: la aplicación ya está actualizada.",
+  usageDisabled: "El uso está desactivado en la configuración de este host.",
   stale: "Sin actualizar",
   unavailable: "No disponible",
   error: "Error",
@@ -317,6 +323,7 @@ const fr: Messages = {
   retry: "Réessayer",
   linkLostTitle: "Rechargez l'extension",
   linkLostBody: "La session avec le démon Paseo a pris fin. Rechargez l'extension pour vous reconnecter : l'application elle-même est à jour.",
+  usageDisabled: "L'utilisation est désactivée dans les réglages de cet hôte.",
   stale: "Plus de mise à jour",
   unavailable: "Indisponible",
   error: "Erreur",
@@ -363,6 +370,7 @@ const ptBR: Messages = {
   retry: "Tentar novamente",
   linkLostTitle: "Recarregue o plugin",
   linkLostBody: "A sessão com o daemon do Paseo terminou. Recarregue o plugin para reconectar: o aplicativo já está atualizado.",
+  usageDisabled: "O uso está desativado nas configurações deste host.",
   stale: "Sem atualizar",
   unavailable: "Indisponível",
   error: "Erro",
@@ -409,6 +417,7 @@ const ru: Messages = {
   retry: "Повторить",
   linkLostTitle: "Перезагрузите плагин",
   linkLostBody: "Сессия с демоном Paseo завершена. Перезагрузите плагин, чтобы восстановить связь: само приложение обновлять не нужно.",
+  usageDisabled: "Использование отключено в настройках этого хоста.",
   stale: "Не обновляется",
   unavailable: "Недоступно",
   error: "Ошибка",
@@ -455,6 +464,7 @@ const ar: Messages = {
   retry: "حاول مرة أخرى",
   linkLostTitle: "أعد تحميل الإضافة",
   linkLostBody: "انتهت الجلسة مع خدمة Paseo. أعد تحميل الإضافة لإعادة الاتصال، فالتطبيق نفسه محدَّث.",
+  usageDisabled: "الاستخدام متوقف في إعدادات هذا المضيف.",
   stale: "متوقّف عن التحديث",
   unavailable: "غير متاح",
   error: "خطأ",

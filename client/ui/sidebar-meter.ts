@@ -16,7 +16,7 @@ import {
 } from "../../shared/usage/format";
 import { paceColor, STATUS_DARK, STATUS_LIGHT, type Palette } from "../../shared/usage/palette";
 import { elapsedPct, formatPaceDelta, paceLabel, windowPace } from "../../shared/usage/pace";
-import { isMeterStale } from "../../shared/usage/errors";
+import { isMeterStale, isUsageDisabled } from "../../shared/usage/errors";
 import { listUsage, type UsageSnapshot, type UsageTone, type UsageWindow } from "../../shared/usage/contract";
 import { windowLabel } from "../../shared/usage/window-label";
 
@@ -35,6 +35,8 @@ import { windowLabel } from "../../shared/usage/window-label";
  */
 const ANCHOR_SELECTOR = '[data-testid="plugin-sidebar-usage-sidebar-usage"]';
 const REFRESH_INTERVAL_MS = 60_000;
+/** While the host has usage switched off, re-check rarely so turning it back on still recovers. */
+const DISABLED_RECHECK_MS = 5 * 60_000;
 /** Theme changes are not announced in the DOM, so the probed colours are polled. */
 const APPEARANCE_POLL_MS = 2_000;
 const NODE_MARK = "data-usage-sidebar-meter";
@@ -255,6 +257,8 @@ export function startSidebarMeter(client: PluginClientContext): PluginCleanup {
   let appearance: Appearance | null = null;
   /** Drives `isMeterStale`; reset by any poll that lands. */
   let consecutiveFailures = 0;
+  /** Polls are skipped until then while the host has usage switched off. */
+  let disabledUntil = 0;
 
   /** Repaints only when the measured colours actually changed. */
   function syncAppearance(): boolean {
@@ -477,6 +481,9 @@ export function startSidebarMeter(client: PluginClientContext): PluginCleanup {
   }
 
   async function refresh(): Promise<void> {
+    if (Date.now() < disabledUntil) {
+      return;
+    }
     try {
       // Claimed rather than shown outright: with a second machine connected, both
       // copies of this plugin paint into the same sidebar, and only one of them
@@ -487,7 +494,16 @@ export function startSidebarMeter(client: PluginClientContext): PluginCleanup {
       ensureMounted();
       syncAppearance();
       paint();
-    } catch {
+    } catch (error) {
+      if (isUsageDisabled(error)) {
+        // Not a failure to fade over: there is nothing to show, so hide the block.
+        disabledUntil = Date.now() + DISABLED_RECHECK_MS;
+        snapshot = null;
+        consecutiveFailures = 0;
+        recompute();
+        paint();
+        return;
+      }
       // Keep the last snapshot, but still repaint: the countdowns are relative to
       // now, so they have to keep ticking through a failed poll — and past the
       // second failure the repaint is also what fades the block. Recomputed, not

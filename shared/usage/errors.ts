@@ -59,6 +59,17 @@ export function isHostLinkLost(error: unknown): boolean {
 }
 
 /**
+ * Paseo 0.15 lets a host switch usage off; `listUsage` then rejects with this
+ * text. The host sends no error code, so the wording is all there is to match.
+ * Not a fault to retry: the fix is the host's settings.
+ */
+const USAGE_DISABLED_PATTERN = /usage is off on this host/i;
+
+export function isUsageDisabled(error: unknown): boolean {
+  return USAGE_DISABLED_PATTERN.test(errorMessage(error));
+}
+
+/**
  * How long a `suspected` failure has to keep failing before it is reported as a
  * dropped session.
  *
@@ -133,9 +144,11 @@ export function isMeterStale(consecutiveFailures: number, rowCount: number): boo
 export type PanelFailureView = {
   /** Show the localized dropped-session guidance instead of the host's text. */
   linkLost: boolean;
+  /** The host has usage switched off; say so instead of the host's text. */
+  usageDisabled: boolean;
   /** The last snapshot is still on screen but is no longer live. */
   showingStale: boolean;
-  /** A retry cannot fix a dropped session, so the error card must not offer one. */
+  /** A retry cannot fix a dropped session or a setting, so the error card must not offer one. */
   showRetry: boolean;
 };
 
@@ -145,9 +158,11 @@ export function panelFailureView(input: {
   providerCount: number;
 }): PanelFailureView {
   const linkLost = input.isError && isHostLinkLost(input.error);
+  const usageDisabled = input.isError && isUsageDisabled(input.error);
   return {
     linkLost,
+    usageDisabled,
     showingStale: input.isError && input.providerCount > 0,
-    showRetry: input.isError && !linkLost,
+    showRetry: input.isError && !linkLost && !usageDisabled,
   };
 }

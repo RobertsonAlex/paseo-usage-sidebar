@@ -1039,14 +1039,21 @@ export function UsageSurface({ theme, layout }: PluginSurfaceProps) {
 
         {query.isError ? (
           <View style={[styles.card, styles.stateCard]}>
-            <Text style={styles.stateTitle}>
-              {failure.linkLost ? messages.linkLostTitle : messages.errorTitle}
-            </Text>
+            {failure.usageDisabled ? null : (
+              <Text style={styles.stateTitle}>
+                {failure.linkLost ? messages.linkLostTitle : messages.errorTitle}
+              </Text>
+            )}
             <Text style={styles.stateText}>
-              {failure.linkLost ? messages.linkLostBody : errorMessage(query.error)}
+              {failure.usageDisabled
+                ? messages.usageDisabled
+                : failure.linkLost
+                  ? messages.linkLostBody
+                  : errorMessage(query.error)}
             </Text>
-            {/* A dropped session cannot be retried into working, so offering the
-                button would just be a way to fail again. */}
+            {/* A dropped session or a host setting cannot be retried into working,
+                so offering the button would just be a way to fail again. The
+                60s poll still re-checks, so turning usage back on recovers. */}
             {failure.showRetry ? (
               <Pressable accessibilityRole="button" style={styles.retryButton} onPress={() => void query.refetch()}>
                 <Text style={styles.retryLabel}>{messages.retry}</Text>

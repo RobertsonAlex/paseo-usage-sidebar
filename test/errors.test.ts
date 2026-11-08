@@ -13,6 +13,7 @@ import {
   errorMessage,
   isHostLinkLost,
   isMeterStale,
+  isUsageDisabled,
   judgeLinkFailure,
   panelFailureView,
   type LinkFailureState,
@@ -116,6 +117,24 @@ describe("isHostLinkLost", () => {
   });
 });
 
+/** Paseo 0.15's text for a host with usage switched off, as the client receives it. */
+const DISABLED_WRAPPED = new Error(
+  "Request failed: Usage is off on this host. requestType=plugin_rpc code=handler_error",
+);
+
+describe("isUsageDisabled", () => {
+  it("matches the host's text, bare or wrapped", () => {
+    assert.equal(isUsageDisabled(new Error("Usage is off on this host.")), true);
+    assert.equal(isUsageDisabled(DISABLED_WRAPPED), true);
+  });
+
+  it("is not a link failure and not anything else", () => {
+    assert.equal(classifyLinkFailure(DISABLED_WRAPPED), "unrelated");
+    assert.equal(isUsageDisabled(UNRELATED), false);
+    assert.equal(isUsageDisabled(undefined), false);
+  });
+});
+
 describe("isMeterStale", () => {
   it("tolerates a single missed poll", () => {
     assert.equal(isMeterStale(0, 3), false);
@@ -138,6 +157,7 @@ describe("panelFailureView", () => {
   it("renders nothing special while the query is healthy", () => {
     assert.deepEqual(panelFailureView({ isError: false, error: null, providerCount: 3 }), {
       linkLost: false,
+      usageDisabled: false,
       showingStale: false,
       showRetry: false,
     });
@@ -146,6 +166,7 @@ describe("panelFailureView", () => {
   it("offers a retry for a recoverable failure", () => {
     assert.deepEqual(panelFailureView({ isError: true, error: UNRELATED, providerCount: 0 }), {
       linkLost: false,
+      usageDisabled: false,
       showingStale: false,
       showRetry: true,
     });
@@ -154,6 +175,13 @@ describe("panelFailureView", () => {
   it("withholds the retry for a dropped session", () => {
     const view = panelFailureView({ isError: true, error: linkLostError, providerCount: 0 });
     assert.equal(view.linkLost, true);
+    assert.equal(view.showRetry, false);
+  });
+
+  it("says usage is off, without a retry, when the host has it switched off", () => {
+    const view = panelFailureView({ isError: true, error: DISABLED_WRAPPED, providerCount: 0 });
+    assert.equal(view.usageDisabled, true);
+    assert.equal(view.linkLost, false);
     assert.equal(view.showRetry, false);
   });
 
