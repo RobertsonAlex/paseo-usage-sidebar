@@ -2,6 +2,7 @@ import { defineRpc } from "@getpaseo/plugin";
 import { z } from "zod";
 import type { Messages } from "../i18n/messages";
 import type { ProviderUsage, UsageSnapshot, UsageWindow } from "../usage/contract";
+import { windowUsedPct } from "../usage/format";
 
 /**
  * Which rows the sidebar meter pins. A row is identified by provider and window
@@ -19,6 +20,8 @@ export const SelectionSchema = z.object({
    * and a second state file to keep in sync would cost more than the field does.
    */
   showPace: z.boolean().default(true),
+  /** Whether percentages read as the share used or the share left. Display only; pace stays on used. */
+  displayAs: z.enum(["used", "remaining"]).default("used"),
 });
 
 export type Selection = z.output<typeof SelectionSchema>;
@@ -30,13 +33,17 @@ export const readSelection = defineRpc({
 });
 
 /**
- * Both fields optional, and each written independently: flipping the pace arrow
+ * Every field optional, and each written independently: flipping the pace arrow
  * must not freeze the default pin set into an explicit one, and a reorder must
  * not carry a stale copy of the toggle back over a newer value.
  */
 export const writeSelection = defineRpc({
   name: "selection.write",
-  input: z.object({ keys: z.array(z.string()).optional(), showPace: z.boolean().optional() }),
+  input: z.object({
+    keys: z.array(z.string()).optional(),
+    showPace: z.boolean().optional(),
+    displayAs: z.enum(["used", "remaining"]).optional(),
+  }),
   output: SelectionSchema,
 });
 
@@ -121,7 +128,7 @@ export function pinnedRows(
       providerName: provider.displayName,
       accountLabel: provider.accountLabel,
       label: labelFor(provider, window, messages),
-      usedPct: window.usedPct ?? (window.remainingPct != null ? 100 - window.remainingPct : null),
+      usedPct: windowUsedPct(window),
       window,
     });
   }

@@ -13,9 +13,10 @@ import {
   formatResetSecondary,
   formatRunsOutLabel,
   resolveTone,
+  windowDisplayPct,
 } from "../../shared/usage/format";
 import { paceColor, STATUS_DARK, STATUS_LIGHT, type Palette } from "../../shared/usage/palette";
-import { elapsedPct, formatPaceDelta, paceLabel, windowPace } from "../../shared/usage/pace";
+import { formatPaceDelta, paceLabel, paceMarkPct, windowPace } from "../../shared/usage/pace";
 import { isMeterStale, isUsageDisabled } from "../../shared/usage/errors";
 import { listUsage, type UsageSnapshot, type UsageTone, type UsageWindow } from "../../shared/usage/contract";
 import { windowLabel } from "../../shared/usage/window-label";
@@ -167,7 +168,8 @@ function readAppearance(): Appearance | null {
   }
 
   const dark = background ? luminanceOf(background) <= 0.5 : true;
-  const labelColor = getComputedStyle(anchor).color || (dark ? "#A1A5A4" : "#71717a");
+  const textNode = anchor.querySelector("div, span") || anchor;
+  const labelColor = getComputedStyle(textNode).color || getComputedStyle(anchor).color || (dark ? "#A1A5A4" : "#71717a");
   const rgb = parseColor(labelColor)?.rgb ?? (dark ? [161, 165, 164] : [113, 113, 122]);
   return {
     labelColor,
@@ -177,7 +179,8 @@ function readAppearance(): Appearance | null {
   };
 }
 
-type MeterRow = { label: string; usedPct: number | null; tone: UsageTone; window: UsageWindow };
+/** `usedPct` drives tone and pace; `displayPct` is what the row prints and fills, per the used/remaining choice. */
+type MeterRow = { label: string; usedPct: number | null; displayPct: number | null; tone: UsageTone; window: UsageWindow };
 type MeterGroup = { provider: string; account: string | null; rows: MeterRow[] };
 
 type RowTiming = { text: string | null; atRisk: boolean; alternate: string | null };
@@ -213,6 +216,7 @@ function toGroups(snapshot: UsageSnapshot, selection: Selection, messages: Messa
     const entry: MeterRow = {
       label: row.label,
       usedPct: row.usedPct,
+      displayPct: windowDisplayPct(row.window, selection.displayAs),
       tone: resolveTone(row.window.tone, row.usedPct),
       window: row.window,
     };
@@ -234,7 +238,7 @@ function groupKey(group: MeterGroup): string {
   return `${group.provider}\u0000${group.account ?? ""}`;
 }
 
-export function startSidebarMeter(client: PluginClientContext): PluginCleanup {
+export function startSidebarMeter(client: PluginClientContext, surfaceId: string): PluginCleanup {
   if (typeof document === "undefined" || typeof MutationObserver === "undefined") {
     return () => {};
   }
@@ -247,7 +251,7 @@ export function startSidebarMeter(client: PluginClientContext): PluginCleanup {
   let messages: Messages = messagesFor(locale);
   let node: HTMLElement | null = null;
   let snapshot: UsageSnapshot | null = null;
-  let selection: Selection = { keys: [], configured: false, showPace: true };
+  let selection: Selection = { keys: [], configured: false, showPace: true, displayAs: "used" };
   let groups: MeterGroup[] = [];
   // Folded headings, by group key. Client-side and unpersisted on purpose: paint()
   // rebuilds the block from scratch on every poll, so the fold has to outlive the
@@ -352,6 +356,24 @@ export function startSidebarMeter(client: PluginClientContext): PluginCleanup {
       provider.append(heading, caret);
       section.append(provider);
 
+      // The rows open the panel. A sibling of the heading, not its parent, so a
+      // fold never navigates and no button sits inside another.
+      const body = document.createElement("div");
+      body.style.cssText = "display:flex;flex-direction:column;gap:8px;pointer-events:auto;cursor:pointer;";
+      body.setAttribute("role", "button");
+      body.setAttribute("tabindex", "0");
+      body.setAttribute("aria-label", messages.title);
+      body.onclick = () => client.openSurface(surfaceId);
+      body.onkeydown = (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          client.openSurface(surfaceId);
+        }
+      };
+      if (open && group.rows.length > 0) {
+        section.append(body);
+      }
+
       for (const row of open ? group.rows : []) {
         const item = document.createElement("div");
         item.style.cssText = "display:flex;flex-direction:column;gap:3px;";
@@ -364,7 +386,7 @@ export function startSidebarMeter(client: PluginClientContext): PluginCleanup {
         label.style.cssText = `color:${labelColor};font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;`;
 
         const value = document.createElement("span");
-        value.textContent = row.usedPct != null ? formatPct(row.usedPct, locale) : "\u2014";
+        value.textContent = row.displayPct != null ? formatPct(row.displayPct, locale) : "\u2014";
         value.style.cssText = `color:${labelColor};font-size:11px;font-weight:500;flex-shrink:0;`;
 
         // The head is space-between, so the number and its arrow travel as one
@@ -392,7 +414,7 @@ export function startSidebarMeter(client: PluginClientContext): PluginCleanup {
         track.style.cssText = `height:3px;border-radius:2px;background:${trackColor};overflow:hidden;`;
 
         const fill = document.createElement("div");
-        fill.style.cssText = `height:3px;border-radius:2px;width:${clampPct(row.usedPct ?? 0)}%;background:${palette[row.tone]};`;
+        fill.style.cssText = `height:3px;border-radius:2px;width:${clampPct(row.displayPct ?? 0)}%;background:${palette[row.tone]};`;
 
         track.append(fill);
 
@@ -404,7 +426,7 @@ export function startSidebarMeter(client: PluginClientContext): PluginCleanup {
         if (pace) {
           // Where the bar would stand if it were tracking the clock exactly.
           const tick = document.createElement("div");
-          tick.style.cssText = `position:absolute;top:-2px;height:7px;width:2px;border-radius:1px;margin-inline-start:-1px;inset-inline-start:${clampPct(elapsedPct(row.window) ?? 0)}%;background:${paceColor(palette, pace.trend)};`;
+          tick.style.cssText = `position:absolute;top:-2px;height:7px;width:2px;border-radius:1px;margin-inline-start:-1px;inset-inline-start:${clampPct(paceMarkPct(row.window, selection.displayAs) ?? 0)}%;background:${paceColor(palette, pace.trend)};`;
           trackRow.append(tick);
         }
         item.append(head, trackRow);
@@ -423,12 +445,9 @@ export function startSidebarMeter(client: PluginClientContext): PluginCleanup {
         }
         if (timing.alternate) {
           item.title = `${row.label} · ${timing.alternate}`;
-          // The meter as a whole is click-through; a row with a tooltip has to opt
-          // back in, because pointer-events:none also suppresses hover.
-          item.style.pointerEvents = "auto";
         }
 
-        section.append(item);
+        body.append(item);
       }
 
       node.append(section);
@@ -457,6 +476,14 @@ export function startSidebarMeter(client: PluginClientContext): PluginCleanup {
       return;
     }
     if (node && node.parentElement === parent) {
+      // The host can re-render siblings around a node it does not own; put it
+      // back under the row, and repaint one that came back empty.
+      if (node.previousSibling !== anchor) {
+        parent.insertBefore(node, anchor.nextSibling);
+      }
+      if (node.children.length === 0 && groups.length > 0) {
+        paint();
+      }
       return;
     }
     node?.remove();

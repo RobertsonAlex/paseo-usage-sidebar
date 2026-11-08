@@ -77,10 +77,11 @@ paseo plugin add RUIIIOVO/paseo-usage-sidebar
 
 ### Usage
 
-- **Quick Glance**: The sidebar shows a mini meter for every pinned quota window, directly under the **Plan usage** entry.
+- **Quick Glance**: The sidebar shows a mini meter for every pinned quota window, directly under the **Plan usage** entry. Click a provider's rows, including their progress bars, to open the usage panel; keyboard users can focus them and press Enter or Space. Click the provider heading instead to fold its rows.
 - **Detailed View**: Pick **Plan usage** in the sidebar, or run **Open plan usage** from the Command Center (`Cmd`/`Ctrl` + `K`).
-- **Reorder & Customize**: Every window in the panel carries a **+ / −** button that pins it to, or hides it from, the sidebar. Drag rows in the **Sidebar order** block to change the order the meter paints.
+- **Reorder & Customize**: Click the pin button on the right of a usage window to pin or unpin it. A filled pin and highlighted row indicate a pinned window on desktop and web. The same pin button in **Sidebar order** unpins a window; drag the grip or use the arrow buttons to reorder. Values and progress bars are read-only, so clicking them does not change your pins.
 - **Pace**: The **Pace** button in the panel header turns the arrow and the clock tick off on both surfaces.
+- **Used or remaining**: The **Percentages** switch in the panel shows each window as the share used or the share left, on both surfaces. Pace always compares spend with the clock; on a remaining bar the clock tick is mirrored so the gap still matches the arrow.
 
 ---
 

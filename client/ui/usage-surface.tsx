@@ -23,15 +23,18 @@ import {
   formatRunsOutLabel,
   resolveTone,
   statusLabel,
+  windowDisplayPct,
   windowUsedPct,
+  type DisplayMode,
 } from "../../shared/usage/format";
 import { paceColor, paletteForSurface } from "../../shared/usage/palette";
-import { elapsedPct, formatPaceDelta, paceLabel, windowPace, type PaceTrend } from "../../shared/usage/pace";
+import { formatPaceDelta, paceLabel, paceMarkPct, windowPace, type PaceTrend } from "../../shared/usage/pace";
 import { errorMessage, panelFailureView } from "../../shared/usage/errors";
 import { isRtl, messagesFor, type Locale, type Messages } from "../../shared/i18n/messages";
 import { getLocale, subscribeLocale } from "../i18n/locale";
 import { publishSelection } from "../selection/store";
 import { claimAccounts } from "../usage/claims";
+import { PinButton } from "./pin-button";
 import {
   defaultKeys,
   pinnedRows,
@@ -60,7 +63,8 @@ const SPACE = { 1: 4, 1.5: 6, 2: 8, 3: 12, 4: 16, 6: 24 } as const;
 const FONT = { sm: 12, base: 14 } as const;
 const RADIUS_LG = 8;
 /** Fixed so a drag offset converts to an index without measuring rows. */
-const ORDER_ROW_HEIGHT = 40;
+const ORDER_ROW_HEIGHT = 48;
+const COMPACT_ORDER_ROW_HEIGHT = 56;
 /** A fetch shorter than this never surfaces a spinner; one that does holds it this long. */
 const BUSY_DELAY_MS = 200;
 const BUSY_MINIMUM_MS = 600;
@@ -126,14 +130,14 @@ function useStyles(theme: PluginTheme, compact: boolean, rtl: boolean) {
 
         /**
          * The reorder block. Rows are a fixed height so a drag can map a finger
-         * offset straight onto an index (`round(dy / ORDER_ROW_HEIGHT)`) without
-         * measuring anything.
+         * offset straight onto an index using the desktop or compact row height,
+         * without measuring anything.
          */
         orderRow: {
           flexDirection: row,
           alignItems: "center",
           gap: SPACE[2],
-          height: ORDER_ROW_HEIGHT,
+          height: compact ? COMPACT_ORDER_ROW_HEIGHT : ORDER_ROW_HEIGHT,
           paddingHorizontal: SPACE[3],
           backgroundColor: theme.colors.surface1,
         },
@@ -148,13 +152,11 @@ function useStyles(theme: PluginTheme, compact: boolean, rtl: boolean) {
         orderLabel: { flex: 1, color: theme.colors.foreground, fontSize: FONT.sm, writingDirection, textAlign },
         orderValue: { color: theme.colors.foregroundMuted, fontSize: FONT.sm, writingDirection },
         orderButton: {
-          width: 22,
-          height: 22,
+          width: compact ? 44 : 28,
+          height: compact ? 44 : 28,
           alignItems: "center",
           justifyContent: "center",
           borderRadius: 6,
-          borderWidth: 1,
-          borderColor: theme.colors.border,
         },
         orderButtonDisabled: { opacity: 0.35 },
         orderEmpty: { padding: SPACE[4] },
@@ -197,31 +199,67 @@ function useStyles(theme: PluginTheme, compact: boolean, rtl: boolean) {
 
         bars: { gap: SPACE[3] },
         bar: { gap: 3 },
+        barRow: {
+          marginHorizontal: -SPACE[2],
+          paddingHorizontal: SPACE[2],
+          paddingVertical: SPACE[1.5],
+          borderRadius: 8,
+          gap: 3,
+        },
+        barRowPinned: {
+          backgroundColor: theme.colors.surface2,
+        },
+        barContentRow: { flexDirection: row, alignItems: "center", gap: SPACE[2] },
+        windowContent: { flex: 1, minWidth: 0, gap: 3 },
         barLabelRow: {
           flexDirection: row,
           justifyContent: "space-between",
           alignItems: "center",
+          flexWrap: "wrap",
           gap: SPACE[2],
         },
         barLabel: { flexShrink: 1, color: theme.colors.foregroundMuted, fontSize: FONT.sm, writingDirection, textAlign },
-        barValueGroup: { flexDirection: row, alignItems: "center", gap: SPACE[2], flexShrink: 0 },
-        /**
-         * A secondary toggle, sized to match the reorder block's arrows. Pinned state
-         * reads as a filled slot rather than an accent chip: an accent fill made this
-         * the most saturated thing on the screen, louder than the bars it annotates.
-         */
-        pinButton: {
-          width: 22,
-          height: 22,
+        displayOptionsCard: {
+          flexDirection: row,
           alignItems: "center",
-          justifyContent: "center",
-          borderRadius: 6,
-          borderWidth: 1,
-          borderColor: theme.colors.border,
+          justifyContent: "space-between",
+          paddingVertical: SPACE[2],
+          paddingHorizontal: SPACE[4],
+          marginBottom: SPACE[3],
         },
-        pinButtonActive: { backgroundColor: theme.colors.surface2 },
-        iconButtonPressed: { opacity: 0.7 },
-        barValue: { color: theme.colors.foreground, fontSize: FONT.sm, fontWeight: "500", writingDirection },
+        displayOptionsLabel: {
+          color: theme.colors.foregroundMuted,
+          fontSize: FONT.sm,
+          writingDirection,
+          textAlign,
+        },
+        segmentedControl: {
+          flexDirection: row,
+          alignItems: "center",
+          backgroundColor: theme.colors.surface2,
+          borderRadius: 6,
+          padding: 2,
+          gap: 2,
+        },
+        segment: {
+          paddingVertical: 3,
+          paddingHorizontal: 10,
+          borderRadius: 4,
+        },
+        segmentActive: {
+          backgroundColor: theme.colors.surface0,
+        },
+        segmentLabel: {
+          color: theme.colors.foregroundMuted,
+          fontSize: FONT.sm,
+          writingDirection,
+        },
+        segmentLabelActive: {
+          color: theme.colors.foreground,
+          fontWeight: "500",
+        },
+        iconButtonPressed: { backgroundColor: theme.colors.surface2 },
+        barValue: { flexShrink: 1, color: theme.colors.foreground, fontSize: FONT.sm, fontWeight: "500", writingDirection, textAlign: rtl ? "left" : "right" },
         barReset: { color: theme.colors.foregroundMuted, fontWeight: "normal" },
         /** Colour is per-reading, so it arrives inline; the weight is what makes the glyph legible at 12px. */
         barPace: { fontWeight: "600" },
@@ -271,6 +309,10 @@ function WindowBar({
   messages,
   pinned,
   showPace,
+  compact,
+  selectionBusy,
+  pinLabel,
+  displayAs = "used",
   onTogglePin,
 }: {
   window: UsageWindow;
@@ -280,8 +322,13 @@ function WindowBar({
   messages: Messages;
   pinned?: boolean;
   showPace: boolean;
+  compact: boolean;
+  selectionBusy: boolean;
+  pinLabel: string;
+  displayAs?: DisplayMode;
   onTogglePin?: () => void;
 }) {
+  const displayPct = windowDisplayPct(window, displayAs);
   const usedPct = windowUsedPct(window);
   const tone = resolveTone(window.tone, usedPct);
   // Read at render rather than memoized: this is a comparison against the clock,
@@ -292,49 +339,29 @@ function WindowBar({
     ? formatRunsOutLabel(window.runsOutAt, messages)
     : formatWindowReset(window, locale, messages);
 
-  return (
-    <View style={styles.bar}>
+  const content = (
+    <>
       <View style={styles.barLabelRow}>
         <Text style={styles.barLabel} numberOfLines={1}>
           {windowLabel(window, messages)}
         </Text>
-        <View style={styles.barValueGroup}>
-          <Text style={styles.barValue}>
-            {usedPct != null ? formatPct(usedPct, locale) : "—"}
-            {pace ? (
-              <Text
-                accessibilityLabel={paceLabel(pace, locale, messages)}
-                style={[styles.barPace, { color: markColor(theme, pace.trend) }]}
-              >
-                {` ${formatPaceDelta(pace, locale)}`}
-              </Text>
-            ) : null}
-            {trailing ? <Text style={atRisk ? styles.barAtRisk : styles.barReset}>{` · ${trailing}`}</Text> : null}
-          </Text>
-          {onTogglePin ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={pinned ? messages.hideFromSidebar : messages.showInSidebar}
-              onPress={onTogglePin}
-              style={({ pressed }) => [
-                styles.pinButton,
-                pinned ? styles.pinButtonActive : null,
-                pressed ? styles.iconButtonPressed : null,
-              ]}
+        <Text style={styles.barValue}>
+          {displayPct != null ? formatPct(displayPct, locale) : "—"}
+          {pace ? (
+            <Text
+              accessibilityLabel={paceLabel(pace, locale, messages)}
+              style={[styles.barPace, { color: markColor(theme, pace.trend) }]}
             >
-              <Icon
-                name={pinned ? "Minus" : "Plus"}
-                size={12}
-                color={pinned ? theme.colors.foreground : theme.colors.foregroundMuted}
-              />
-            </Pressable>
+              {` ${formatPaceDelta(pace, locale)}`}
+            </Text>
           ) : null}
-        </View>
+          {trailing ? <Text style={atRisk ? styles.barAtRisk : styles.barReset}>{` · ${trailing}`}</Text> : null}
+        </Text>
       </View>
       <View style={styles.trackRow}>
         <View style={styles.track}>
           <View
-            style={[styles.fill, { width: `${clampPct(usedPct ?? 0)}%`, backgroundColor: fillColor(theme, tone) }]}
+            style={[styles.fill, { width: `${clampPct(displayPct ?? 0)}%`, backgroundColor: fillColor(theme, tone) }]}
           />
         </View>
         {/* Where the bar would stand if it were tracking the clock exactly; the gap between it and the fill edge is the arrow's number, drawn. */}
@@ -342,13 +369,33 @@ function WindowBar({
           <View
             style={[
               styles.paceMark,
-              { insetInlineStart: `${clampPct(elapsedPct(window) ?? 0)}%`, backgroundColor: markColor(theme, pace.trend) },
+              { insetInlineStart: `${clampPct(paceMarkPct(window, displayAs) ?? 0)}%`, backgroundColor: markColor(theme, pace.trend) },
             ]}
           />
         ) : null}
       </View>
-    </View>
+    </>
   );
+
+  if (onTogglePin) {
+    return (
+      <View style={[styles.barRow, pinned ? styles.barRowPinned : null]}>
+        <View style={styles.barContentRow}>
+          <View style={styles.windowContent}>{content}</View>
+          <PinButton
+            pinned={Boolean(pinned)}
+            label={`${pinned ? messages.hideFromSidebar : messages.showInSidebar} · ${pinLabel}`}
+            disabled={selectionBusy}
+            compact={compact}
+            theme={theme}
+            onPress={onTogglePin}
+          />
+        </View>
+      </View>
+    );
+  }
+
+  return <View style={styles.bar}>{content}</View>;
 }
 
 function BalanceBar({
@@ -457,7 +504,7 @@ function clampIndex(value: number, length: number): number {
  * plugin host, so a drag fell through to the browser and selected text instead.
  * Pointer events on the underlying node are unambiguous: `preventDefault` on
  * pointerdown kills the text selection, and pointer capture keeps the gesture
- * alive when the cursor outruns the 40px grip.
+ * alive when the cursor outruns the grip.
  *
  * On iOS and Android the ref is a native view with no `addEventListener`, so the
  * effect no-ops and the arrow buttons are the whole story there.
@@ -465,6 +512,7 @@ function clampIndex(value: number, length: number): number {
 function DragHandle({
   rowKey,
   label,
+  disabled,
   style,
   children,
   onBegin,
@@ -473,6 +521,7 @@ function DragHandle({
 }: {
   rowKey: string;
   label: string;
+  disabled: boolean;
   style: StyleProp<ViewStyle>;
   children: React.ReactNode;
   onBegin: (key: string) => void;
@@ -483,7 +532,7 @@ function DragHandle({
 
   useEffect(() => {
     const node = ref.current as unknown as HTMLElement | null;
-    if (!node || typeof node.addEventListener !== "function") {
+    if (disabled || !node || typeof node.addEventListener !== "function") {
       return;
     }
 
@@ -525,7 +574,7 @@ function DragHandle({
       node.removeEventListener("pointerdown", onPointerDown);
       abandon?.();
     };
-  }, [rowKey, onBegin, onDrag, onEnd]);
+  }, [rowKey, disabled, onBegin, onDrag, onEnd]);
 
   return (
     <View ref={ref} accessibilityLabel={label} style={style}>
@@ -539,9 +588,8 @@ function DragHandle({
  * grip and movable by the arrows.
  *
  * It lives here rather than on the meter itself because this surface already
- * owns the selection and its persistence — and because the meter is a raw DOM
- * node with `pointer-events:none` that repaints wholesale every refresh, so a
- * gesture on it would be fighting the host's own sidebar.
+ * owns the selection and its persistence. The sidebar meter opens this surface;
+ * rearrangement stays here so a gesture on the meter cannot accidentally navigate.
  *
  * The arrows are not a lesser fallback: they are the only path that works with a
  * keyboard, a screen reader, or on a phone, where a drag inside a scroll view is
@@ -554,7 +602,9 @@ function OrderBlock({
   locale,
   messages,
   onReorder,
-  onRemove,
+  onUnpin,
+  compact,
+  selectionBusy,
 }: {
   rows: PinnedRow[];
   styles: Styles;
@@ -563,8 +613,11 @@ function OrderBlock({
   messages: Messages;
   onReorder: (keys: string[]) => void;
   /** Unpin straight from this block, without hunting for the window row below. */
-  onRemove: (key: string) => void;
+  onUnpin: (key: string) => void;
+  compact: boolean;
+  selectionBusy: boolean;
 }) {
+  const rowHeight = compact ? COMPACT_ORDER_ROW_HEIGHT : ORDER_ROW_HEIGHT;
   const [dragKey, setDragKey] = useState<string | null>(null);
   const [dragOffset, setDragOffset] = useState(0);
   const [previewKeys, setPreviewKeys] = useState<string[] | null>(null);
@@ -589,32 +642,34 @@ function OrderBlock({
   });
 
   const move = (from: number, to: number) => {
+    if (selectionBusy) return;
     onReorder(moved(keys, from, clampIndex(to, keys.length)));
   };
 
   const beginDrag = useCallback((key: string) => {
+    if (selectionBusy) return;
     liveKeys.current = [...keysRef.current];
     settled.current = 0;
     setPreviewKeys(liveKeys.current);
     setDragKey(key);
     setDragOffset(0);
-  }, []);
+  }, [selectionBusy]);
 
   const dragTo = useCallback((key: string, dy: number) => {
     const from = liveKeys.current.indexOf(key);
-    const steps = Math.round((dy - settled.current) / ORDER_ROW_HEIGHT);
+    const steps = Math.round((dy - settled.current) / rowHeight);
     if (steps !== 0 && from >= 0) {
       const to = clampIndex(from + steps, liveKeys.current.length);
       if (to !== from) {
         liveKeys.current = moved(liveKeys.current, from, to);
         // The row has moved a slot under the finger, so the same finger position
         // now means zero offset again — otherwise it would jump a full row.
-        settled.current += (to - from) * ORDER_ROW_HEIGHT;
+        settled.current += (to - from) * rowHeight;
         setPreviewKeys(liveKeys.current);
       }
     }
     setDragOffset(dy - settled.current);
-  }, []);
+  }, [rowHeight]);
 
   const endDrag = useCallback((committed: boolean) => {
     const next = liveKeys.current;
@@ -651,6 +706,7 @@ function OrderBlock({
             <DragHandle
               rowKey={row.key}
               label={messages.reorder}
+              disabled={selectionBusy}
               style={styles.orderHandle}
               onBegin={beginDrag}
               onDrag={dragTo}
@@ -665,40 +721,37 @@ function OrderBlock({
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={messages.moveUp}
-              disabled={position <= 0}
+              disabled={selectionBusy || position <= 0}
               onPress={() => move(index, index - 1)}
               style={({ pressed }) => [
                 styles.orderButton,
-                position <= 0 ? styles.orderButtonDisabled : null,
+                selectionBusy || position <= 0 ? styles.orderButtonDisabled : null,
                 pressed ? styles.iconButtonPressed : null,
               ]}
             >
-              <Icon name="ChevronUp" size={12} color={theme.colors.foregroundMuted} />
+              <Icon name="ChevronUp" size={16} color={theme.colors.foregroundMuted} />
             </Pressable>
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={messages.moveDown}
-              disabled={position >= ordered.length - 1}
+              disabled={selectionBusy || position >= ordered.length - 1}
               onPress={() => move(index, index + 1)}
               style={({ pressed }) => [
                 styles.orderButton,
-                position >= ordered.length - 1 ? styles.orderButtonDisabled : null,
+                selectionBusy || position >= ordered.length - 1 ? styles.orderButtonDisabled : null,
                 pressed ? styles.iconButtonPressed : null,
               ]}
             >
-              <Icon name="ChevronDown" size={12} color={theme.colors.foregroundMuted} />
+              <Icon name="ChevronDown" size={16} color={theme.colors.foregroundMuted} />
             </Pressable>
-            {/* Same affordance as the window row's pin toggle, on the block that
-                actually lists what is pinned — removing something here no longer
-                means scrolling down to find the row it came from. */}
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={messages.hideFromSidebar}
-              onPress={() => onRemove(row.key)}
-              style={({ pressed }) => [styles.orderButton, pressed ? styles.iconButtonPressed : null]}
-            >
-              <Icon name="Minus" size={12} color={theme.colors.foregroundMuted} />
-            </Pressable>
+            <PinButton
+              pinned
+              label={`${messages.hideFromSidebar} · ${row.providerName} · ${row.label}`}
+              disabled={selectionBusy}
+              compact={compact}
+              theme={theme}
+              onPress={() => onUnpin(row.key)}
+            />
           </View>
         );
       })}
@@ -715,7 +768,10 @@ function ProviderBlock({
   messages,
   pinnedKeys,
   showPace,
+  displayAs,
   onTogglePin,
+  compact,
+  selectionBusy,
 }: {
   provider: ProviderUsage;
   /** The snapshot is still rendered, but it is not being refreshed any more. */
@@ -726,7 +782,10 @@ function ProviderBlock({
   messages: Messages;
   pinnedKeys: ReadonlySet<string>;
   showPace: boolean;
+  displayAs: DisplayMode;
   onTogglePin: (key: string) => void;
+  compact: boolean;
+  selectionBusy: boolean;
 }) {
   const status = statusLabel(provider.status, messages);
   /**
@@ -788,6 +847,10 @@ function ProviderBlock({
               messages={messages}
               pinned={pinnedKeys.has(rowKey(provider.providerId, window.id))}
               showPace={showPace}
+              compact={compact}
+              selectionBusy={selectionBusy}
+              pinLabel={`${provider.displayName} · ${windowLabel(window, messages)}`}
+              displayAs={displayAs}
               onTogglePin={() => onTogglePin(rowKey(provider.providerId, window.id))}
             />
           ))}
@@ -910,10 +973,12 @@ export function UsageSurface({ theme, layout }: PluginSurfaceProps) {
    * mid-drag would yank the list back to the server's copy.
    */
   const [localOrder, setLocalOrder] = useState<string[] | null>(null);
+  const [localDisplayAs, setLocalDisplayAs] = useState<DisplayMode | null>(null);
   const order = localOrder ?? persistedOrder;
-  /** Same local-first rule as the order: the toggle must not wait on a round trip. */
+  /** Same local-first rule as the order: the toggles must not wait on a round trip. */
   const [localShowPace, setLocalShowPace] = useState<boolean | null>(null);
   const showPace = localShowPace ?? selectionQuery.data?.showPace ?? true;
+  const displayAs: DisplayMode = localDisplayAs ?? selectionQuery.data?.displayAs ?? "used";
   const pinnedKeys = useMemo(() => new Set(order), [order]);
 
   const pinned: PinnedRow[] = useMemo(() => {
@@ -929,11 +994,11 @@ export function UsageSurface({ theme, layout }: PluginSurfaceProps) {
   }, [query.data, order, messages]);
 
   /**
-   * One writer for both settings, each sent on its own: the server merges, so a
-   * reorder never carries the toggle along and a toggle never rewrites the pins.
+   * One writer for every setting, each sent on its own: the server merges, so a
+   * reorder never carries a toggle along and a toggle never rewrites the pins.
    */
   const saveSelection = useMutation({
-    mutationFn: (input: { keys?: string[]; showPace?: boolean }) => persistSelection(input),
+    mutationFn: (input: { keys?: string[]; showPace?: boolean; displayAs?: DisplayMode }) => persistSelection(input),
     onSuccess: (selection) => {
       queryClient.setQueryData(["usage-sidebar", "selection"], selection);
       publishSelection(selection);
@@ -944,7 +1009,7 @@ export function UsageSurface({ theme, layout }: PluginSurfaceProps) {
      * edit puts the panel back on the last arrangement that was actually saved —
      * the one the sidebar meter never stopped showing — and `isError` carries the
      * explanation until the next attempt. Only the setting that was sent is
-     * rolled back: the other may hold an edit of its own still in flight.
+     * rolled back: another may hold an edit of its own still in flight.
      */
     onError: (_error, input) => {
       if (input.keys !== undefined) {
@@ -952,6 +1017,9 @@ export function UsageSurface({ theme, layout }: PluginSurfaceProps) {
       }
       if (input.showPace !== undefined) {
         setLocalShowPace(null);
+      }
+      if (input.displayAs !== undefined) {
+        setLocalDisplayAs(null);
       }
     },
   });
@@ -961,20 +1029,27 @@ export function UsageSurface({ theme, layout }: PluginSurfaceProps) {
     saveSelection.mutate({ keys });
   };
 
+  const commitDisplayAs = (mode: DisplayMode) => {
+    setLocalDisplayAs(mode);
+    saveSelection.mutate({ displayAs: mode });
+  };
+
   const togglePace = () => {
     setLocalShowPace(!showPace);
     saveSelection.mutate({ showPace: !showPace });
   };
 
   /**
-   * One mutation writes both settings, so the error has to say which one it
+   * One mutation writes every setting, so the error has to say which one it
    * undid — and sit beside the control that changed back, not under the order
    * block, which a pace toggle never touched.
    */
   const failedWrite = saveSelection.isError
     ? saveSelection.variables?.showPace !== undefined
       ? "pace"
-      : "pins"
+      : saveSelection.variables?.displayAs !== undefined
+        ? "display"
+        : "pins"
     : null;
 
   const togglePin = (key: string) => {
@@ -1069,6 +1144,37 @@ export function UsageSurface({ theme, layout }: PluginSurfaceProps) {
         ) : null}
 
         {providers.length > 0 ? (
+          <View style={[styles.card, styles.displayOptionsCard]}>
+            <Text style={styles.displayOptionsLabel}>{messages.displayAs}</Text>
+            <View style={styles.segmentedControl}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={messages.displayUsed}
+                disabled={selectionQuery.isPending || saveSelection.isPending}
+                onPress={() => commitDisplayAs("used")}
+                style={[styles.segment, displayAs === "used" ? styles.segmentActive : null]}
+              >
+                <Text style={[styles.segmentLabel, displayAs === "used" ? styles.segmentLabelActive : null]}>
+                  {messages.displayUsed}
+                </Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={messages.displayRemaining}
+                disabled={selectionQuery.isPending || saveSelection.isPending}
+                onPress={() => commitDisplayAs("remaining")}
+                style={[styles.segment, displayAs === "remaining" ? styles.segmentActive : null]}
+              >
+                <Text style={[styles.segmentLabel, displayAs === "remaining" ? styles.segmentLabelActive : null]}>
+                  {messages.displayRemaining}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        ) : null}
+        {failedWrite === "display" ? <Text style={styles.orderError}>{messages.displaySaveFailed}</Text> : null}
+
+        {providers.length > 0 ? (
           <View style={styles.orderSection}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionHeaderTitle}>{messages.sidebarOrder}</Text>
@@ -1082,7 +1188,9 @@ export function UsageSurface({ theme, layout }: PluginSurfaceProps) {
               // The block arranges only the rows this snapshot resolved; the pins
               // it could not see keep their places in the list that is saved.
               onReorder={(visible) => commitOrder(reorderVisible(order, visible))}
-              onRemove={togglePin}
+              compact={layout.compact}
+              selectionBusy={selectionQuery.isPending || saveSelection.isPending}
+              onUnpin={togglePin}
             />
             {failedWrite === "pins" ? <Text style={styles.orderError}>{messages.pinSaveFailed}</Text> : null}
           </View>
@@ -1102,7 +1210,10 @@ export function UsageSurface({ theme, layout }: PluginSurfaceProps) {
                   messages={messages}
                   pinnedKeys={pinnedKeys}
                   showPace={showPace}
+                  displayAs={displayAs}
                   onTogglePin={togglePin}
+                  compact={layout.compact}
+                  selectionBusy={selectionQuery.isPending || saveSelection.isPending}
                 />
               </Fragment>
             ))}

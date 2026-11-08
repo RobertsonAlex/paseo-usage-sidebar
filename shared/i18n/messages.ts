@@ -74,6 +74,11 @@ export type Messages = {
   pinSaveFailed: string;
   /** The pace toggle could not be written, so it was flipped back. */
   paceSaveFailed: string;
+  /** The used/remaining choice could not be written, so it was switched back. */
+  displaySaveFailed: string;
+  displayAs: string;
+  displayUsed: string;
+  displayRemaining: string;
 };
 
 const en: Messages = {
@@ -107,9 +112,9 @@ const en: Messages = {
   windowDaily: "Today",
   windowMonthly: "This month",
   windowScoped: (base, scope) => `${base} (${scope})`,
-  showInSidebar: "Show in sidebar",
-  hideFromSidebar: "Hide from sidebar",
-  sidebarEmpty: "Nothing pinned to the sidebar",
+  showInSidebar: "Pin to sidebar",
+  hideFromSidebar: "Unpin from sidebar",
+  sidebarEmpty: "Pin a usage window below to show it in the sidebar",
   sidebarOrder: "Sidebar order",
   moveUp: "Move up",
   moveDown: "Move down",
@@ -121,6 +126,10 @@ const en: Messages = {
   paceBehind: (points) => `${points} points behind pace`,
   pinSaveFailed: "Could not save the sidebar arrangement. Your change was undone.",
   paceSaveFailed: "Could not save the pace setting. Your change was undone.",
+  displaySaveFailed: "Could not save the percentage setting. Your change was undone.",
+  displayAs: "Percentages",
+  displayUsed: "Used",
+  displayRemaining: "Remaining",
 };
 
 const zhCN: Messages = {
@@ -156,9 +165,9 @@ const zhCN: Messages = {
   // Latin model names inside full-width parentheses read as a foreign body in a
   // Chinese line; the interpunct is what Chinese UI copy uses to qualify a term.
   windowScoped: (base, scope) => `${base} · ${scope}`,
-  showInSidebar: "在侧边栏显示",
-  hideFromSidebar: "从侧边栏移除",
-  sidebarEmpty: "侧边栏未固定任何用量",
+  showInSidebar: "钉住到侧边栏",
+  hideFromSidebar: "取消钉住",
+  sidebarEmpty: "点击下方用量右侧的图钉，即可添加到侧边栏",
   sidebarOrder: "侧边栏顺序",
   moveUp: "上移",
   moveDown: "下移",
@@ -170,6 +179,10 @@ const zhCN: Messages = {
   paceBehind: (points) => `落后时间进度 ${points} 个百分点`,
   pinSaveFailed: "无法保存侧边栏排列，已撤销此次更改。",
   paceSaveFailed: "无法保存节奏设置，已撤销此次更改。",
+  displaySaveFailed: "无法保存百分比设置，已撤销此次更改。",
+  displayAs: "百分比",
+  displayUsed: "已用",
+  displayRemaining: "剩余",
 };
 
 const ja: Messages = {
@@ -203,8 +216,8 @@ const ja: Messages = {
   windowDaily: "今日",
   windowMonthly: "今月",
   windowScoped: (base, scope) => `${base}（${scope}）`,
-  showInSidebar: "サイドバーに表示",
-  hideFromSidebar: "サイドバーから削除",
+  showInSidebar: "サイドバーに固定",
+  hideFromSidebar: "固定を解除",
   sidebarEmpty: "サイドバーに固定された項目はありません",
   sidebarOrder: "サイドバーの順序",
   moveUp: "上へ",
@@ -217,6 +230,10 @@ const ja: Messages = {
   paceBehind: (points) => `ペースより ${points} ポイント少ない`,
   pinSaveFailed: "サイドバーの配置を保存できませんでした。変更は取り消されました。",
   paceSaveFailed: "ペースの設定を保存できませんでした。変更は取り消されました。",
+  displaySaveFailed: "パーセンテージの設定を保存できませんでした。変更は取り消されました。",
+  displayAs: "パーセンテージ",
+  displayUsed: "使用済み",
+  displayRemaining: "残り",
 };
 
 const ko: Messages = {
@@ -250,8 +267,8 @@ const ko: Messages = {
   windowDaily: "오늘",
   windowMonthly: "이번 달",
   windowScoped: (base, scope) => `${base} (${scope})`,
-  showInSidebar: "사이드바에 표시",
-  hideFromSidebar: "사이드바에서 제거",
+  showInSidebar: "사이드바에 고정",
+  hideFromSidebar: "고정 해제",
   sidebarEmpty: "사이드바에 고정된 항목 없음",
   sidebarOrder: "사이드바 순서",
   moveUp: "위로",
@@ -264,6 +281,10 @@ const ko: Messages = {
   paceBehind: (points) => `기준보다 ${points}포인트 느림`,
   pinSaveFailed: "사이드바 배치를 저장하지 못했습니다. 변경 사항이 취소되었습니다.",
   paceSaveFailed: "속도 설정을 저장하지 못했습니다. 변경 사항이 취소되었습니다.",
+  displaySaveFailed: "백분율 설정을 저장하지 못했습니다. 변경 사항이 취소되었습니다.",
+  displayAs: "백분율",
+  displayUsed: "사용됨",
+  displayRemaining: "남음",
 };
 
 const es: Messages = {
@@ -297,8 +318,8 @@ const es: Messages = {
   windowDaily: "Hoy",
   windowMonthly: "Este mes",
   windowScoped: (base, scope) => `${base} (${scope})`,
-  showInSidebar: "Mostrar en la barra lateral",
-  hideFromSidebar: "Quitar de la barra lateral",
+  showInSidebar: "Fijar en la barra lateral",
+  hideFromSidebar: "Desfijar de la barra lateral",
   sidebarEmpty: "Nada fijado en la barra lateral",
   sidebarOrder: "Orden de la barra lateral",
   moveUp: "Subir",
@@ -311,6 +332,10 @@ const es: Messages = {
   paceBehind: (points) => `${points} puntos por debajo del ritmo`,
   pinSaveFailed: "No se pudo guardar la disposición de la barra lateral. Se deshizo el cambio.",
   paceSaveFailed: "No se pudo guardar el ajuste de ritmo. Se deshizo el cambio.",
+  displaySaveFailed: "No se pudo guardar el ajuste de porcentajes. Se deshizo el cambio.",
+  displayAs: "Porcentajes",
+  displayUsed: "Usado",
+  displayRemaining: "Restante",
 };
 
 const fr: Messages = {
@@ -344,8 +369,8 @@ const fr: Messages = {
   windowDaily: "Aujourd'hui",
   windowMonthly: "Ce mois-ci",
   windowScoped: (base, scope) => `${base} (${scope})`,
-  showInSidebar: "Afficher dans la barre latérale",
-  hideFromSidebar: "Retirer de la barre latérale",
+  showInSidebar: "Épingler dans la barre latérale",
+  hideFromSidebar: "Désépingler de la barre latérale",
   sidebarEmpty: "Rien d'épinglé dans la barre latérale",
   sidebarOrder: "Ordre de la barre latérale",
   moveUp: "Monter",
@@ -358,6 +383,10 @@ const fr: Messages = {
   paceBehind: (points) => `${points} points en dessous du rythme`,
   pinSaveFailed: "Impossible d'enregistrer la disposition de la barre latérale. La modification a été annulée.",
   paceSaveFailed: "Impossible d'enregistrer le réglage du rythme. La modification a été annulée.",
+  displaySaveFailed: "Impossible d'enregistrer le réglage des pourcentages. La modification a été annulée.",
+  displayAs: "Pourcentages",
+  displayUsed: "Utilisé",
+  displayRemaining: "Restant",
 };
 
 const ptBR: Messages = {
@@ -391,8 +420,8 @@ const ptBR: Messages = {
   windowDaily: "Hoje",
   windowMonthly: "Este mês",
   windowScoped: (base, scope) => `${base} (${scope})`,
-  showInSidebar: "Mostrar na barra lateral",
-  hideFromSidebar: "Remover da barra lateral",
+  showInSidebar: "Fixar na barra lateral",
+  hideFromSidebar: "Desafixar da barra lateral",
   sidebarEmpty: "Nada fixado na barra lateral",
   sidebarOrder: "Ordem da barra lateral",
   moveUp: "Mover para cima",
@@ -405,6 +434,10 @@ const ptBR: Messages = {
   paceBehind: (points) => `${points} pontos abaixo do ritmo`,
   pinSaveFailed: "Não foi possível salvar a disposição da barra lateral. A alteração foi desfeita.",
   paceSaveFailed: "Não foi possível salvar a configuração de ritmo. A alteração foi desfeita.",
+  displaySaveFailed: "Não foi possível salvar a configuração de porcentagens. A alteração foi desfeita.",
+  displayAs: "Porcentagens",
+  displayUsed: "Usado",
+  displayRemaining: "Restante",
 };
 
 const ru: Messages = {
@@ -438,8 +471,8 @@ const ru: Messages = {
   windowDaily: "Сегодня",
   windowMonthly: "Этот месяц",
   windowScoped: (base, scope) => `${base} (${scope})`,
-  showInSidebar: "Показать на боковой панели",
-  hideFromSidebar: "Убрать с боковой панели",
+  showInSidebar: "Закрепить на боковой панели",
+  hideFromSidebar: "Открепить от боковой панели",
   sidebarEmpty: "На боковой панели ничего не закреплено",
   sidebarOrder: "Порядок в боковой панели",
   moveUp: "Вверх",
@@ -452,6 +485,10 @@ const ru: Messages = {
   paceBehind: (points) => `на ${points} п. п. ниже темпа`,
   pinSaveFailed: "Не удалось сохранить расположение на боковой панели. Изменение отменено.",
   paceSaveFailed: "Не удалось сохранить настройку темпа. Изменение отменено.",
+  displaySaveFailed: "Не удалось сохранить настройку процентов. Изменение отменено.",
+  displayAs: "Проценты",
+  displayUsed: "Использовано",
+  displayRemaining: "Осталось",
 };
 
 const ar: Messages = {
@@ -485,8 +522,8 @@ const ar: Messages = {
   windowDaily: "اليوم",
   windowMonthly: "هذا الشهر",
   windowScoped: (base, scope) => `${base} (${scope})`,
-  showInSidebar: "إظهار في الشريط الجانبي",
-  hideFromSidebar: "إزالة من الشريط الجانبي",
+  showInSidebar: "تثبيت في الشريط الجانبي",
+  hideFromSidebar: "إلغاء التثبيت من الشريط الجانبي",
   sidebarEmpty: "لا شيء مثبَّت في الشريط الجانبي",
   sidebarOrder: "ترتيب الشريط الجانبي",
   moveUp: "تحريك لأعلى",
@@ -499,6 +536,10 @@ const ar: Messages = {
   paceBehind: (points) => `${points} نقطة دون الوتيرة`,
   pinSaveFailed: "تعذّر حفظ ترتيب الشريط الجانبي. تم التراجع عن التغيير.",
   paceSaveFailed: "تعذّر حفظ إعداد الوتيرة. تم التراجع عن التغيير.",
+  displaySaveFailed: "تعذّر حفظ إعداد النسب المئوية. تم التراجع عن التغيير.",
+  displayAs: "النسب المئوية",
+  displayUsed: "المستخدم",
+  displayRemaining: "المتبقي",
 };
 
 export const MESSAGES: Record<Locale, Messages> = {

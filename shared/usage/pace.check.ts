@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { messagesFor } from "../i18n/messages";
 import type { UsageWindow } from "./contract";
-import { elapsedPct, formatPaceDelta, paceLabel, windowPace } from "./pace";
+import { elapsedPct, formatPaceDelta, paceLabel, paceMarkPct, windowPace } from "./pace";
 
 /**
  * Self-check for the one piece of this plugin with arithmetic in it.
@@ -25,6 +25,11 @@ assert.equal(elapsedPct(window("five_hour", 2 * HOUR), NOW), 60, "3h into a 5h w
 assert.equal(elapsedPct(window("weekly", 3.5 * DAY), NOW), 50, "3.5d left of 7d is halfway");
 assert.equal(elapsedPct(window("weekly_model_fable", 3.5 * DAY), NOW), 50, "model-scoped weeklies are weeks too");
 assert.equal(elapsedPct(window("daily", 6 * HOUR), NOW), 75, "6h left of a day is 75% elapsed");
+
+// The tick mirrors on a bar that shows what is left, and stays unknowable when the period is.
+assert.equal(paceMarkPct(window("five_hour", 2 * HOUR), "used", NOW), 60, "used bar: tick at elapsed share");
+assert.equal(paceMarkPct(window("five_hour", 2 * HOUR), "remaining", NOW), 40, "remaining bar: tick at time left");
+assert.equal(paceMarkPct(window("coding_limit_abc", 2 * HOUR), "remaining", NOW), null, "unknown period: no tick");
 
 // Unknowable periods stay unknowable rather than being guessed.
 assert.equal(elapsedPct(window("coding_limit_abc", 2 * HOUR), NOW), null, "unknown id yields no pace");

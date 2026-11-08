@@ -4,7 +4,11 @@
  * Run: npm test
  */
 import assert from "node:assert/strict";
-import { describe, it } from "node:test";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { after, describe, it } from "node:test";
+import { readSelectionState, writeSelectionState } from "../server/selection/state";
 import { pinnedRows, reorderVisible, type Selection } from "../shared/selection/contract";
 import { messagesFor } from "../shared/i18n/messages";
 import type { ProviderUsage, UsageSnapshot } from "../shared/usage/contract";
@@ -83,7 +87,12 @@ describe("a reorder while one provider is missing", () => {
   }
 
   it("still shows the missing provider's pin once it reports again", () => {
-    const saved: Selection = { keys: ["claude:five_hour", "codex:weekly", "claude:weekly"], configured: true };
+    const saved: Selection = {
+      keys: ["claude:five_hour", "codex:weekly", "claude:weekly"],
+      configured: true,
+      showPace: true,
+      displayAs: "used",
+    };
 
     const degraded = snapshot([provider("claude", ["five_hour", "weekly"]), provider("codex", [])]);
     const onScreen = pinnedRows(degraded, saved, label, messages).map((row) => row.key);
@@ -97,5 +106,33 @@ describe("a reorder while one provider is missing", () => {
       pinnedRows(recovered, { keys: next, configured: true }, label, messages).map((row) => row.key),
       next,
     );
+  });
+});
+
+describe("writeSelectionState", () => {
+  const dir = mkdtempSync(join(tmpdir(), "usage-sidebar-state-"));
+  const previous = process.env.XDG_STATE_HOME;
+  process.env.XDG_STATE_HOME = dir;
+  after(() => {
+    if (previous === undefined) {
+      delete process.env.XDG_STATE_HOME;
+    } else {
+      process.env.XDG_STATE_HOME = previous;
+    }
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("defaults to used, and leaves displayAs alone when a write omits it", () => {
+    assert.equal(readSelectionState().displayAs, "used");
+    writeSelectionState({ displayAs: "remaining" });
+    assert.equal(readSelectionState().configured, false, "a display toggle does not freeze the pin set");
+    writeSelectionState({ keys: ["claude:weekly"] });
+    writeSelectionState({ showPace: false });
+    assert.deepEqual(readSelectionState(), {
+      keys: ["claude:weekly"],
+      configured: true,
+      showPace: false,
+      displayAs: "remaining",
+    });
   });
 });

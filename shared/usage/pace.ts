@@ -1,6 +1,6 @@
 import type { Locale, Messages } from "../i18n/messages";
 import type { UsageWindow } from "./contract";
-import { formatPct } from "./format";
+import { formatPct, type DisplayMode } from "./format";
 
 /**
  * How far ahead of the clock a window is being spent.
@@ -93,6 +93,16 @@ export function elapsedPct(window: UsageWindow, now: number = Date.now()): numbe
   // A reset the daemon has not caught up with yet reads as slightly past the end
   // of the window; clamping keeps that from printing as a phantom overspend.
   return Math.max(0, Math.min(100, elapsed));
+}
+
+/**
+ * Where the clock tick sits on a bar. Pace itself is always spend against the
+ * clock; a bar showing what is left fills from the other end, so its tick is
+ * mirrored to keep the gap between fill edge and tick equal to the arrow's number.
+ */
+export function paceMarkPct(window: UsageWindow, displayAs: DisplayMode, now: number = Date.now()): number | null {
+  const elapsed = elapsedPct(window, now);
+  return elapsed == null || displayAs === "used" ? elapsed : 100 - elapsed;
 }
 
 /**
