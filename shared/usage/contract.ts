@@ -43,9 +43,9 @@ export const ProviderUsageSchema = z.object({
   status: UsageStatusSchema,
   planLabel: z.string().nullable().default(null),
   /**
-   * The account the plan belongs to. Not part of the daemon's payload — the
-   * server half fills it in from the provider CLI's own login file (see
-   * server/usage/account.ts), so it is optional and absent is normal.
+   * The account the plan belongs to. Not a field of the daemon's payload: it is
+   * read off the row name Paseo gives an account-scoped provider (see
+   * shared/usage/account.ts), so it is optional and absent is normal.
    */
   accountLabel: z.string().nullable().default(null),
   sourceLabel: z.string().nullable().optional(),
@@ -81,3 +81,18 @@ export const listUsage = defineRpc({
   input: z.object({}),
   output: UsageSnapshotSchema,
 });
+
+/**
+ * The daemon's payload is validated rather than trusted: a provider that reports
+ * a window shape this plugin does not model should degrade to a missing field,
+ * not crash the surface. Shared because the sidebar reads other hosts' daemons
+ * directly, without this plugin's server half in between.
+ */
+export function normalizeSnapshot(payload: unknown): UsageSnapshot {
+  const raw = (payload ?? {}) as { fetchedAt?: unknown; providers?: unknown };
+  return UsageSnapshotSchema.parse({
+    fetchedAt: typeof raw.fetchedAt === "string" ? raw.fetchedAt : null,
+    source: "sdk",
+    providers: Array.isArray(raw.providers) ? raw.providers : [],
+  });
+}

@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
-import type { ProviderUsage } from "../../shared/usage/contract";
+import type { ProviderUsage } from "./contract";
 import { accountOf, dedupeByAccount } from "./account";
 
 /**
  * Self-check for the account half: the key read off Paseo's row name, and the
  * rule that decides whether a row is a second account or a second copy of one.
  *
- * `npx tsx server/usage/account.check.ts` — see shared/usage/pace.check.ts for
+ * `npx tsx shared/usage/account.check.ts` — see pace.check.ts for
  * why the repo's checks are plain asserts.
  */
 

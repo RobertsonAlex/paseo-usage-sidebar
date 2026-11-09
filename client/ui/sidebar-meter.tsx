@@ -4,15 +4,14 @@ import { useEffect, useMemo, useRef, useSyncExternalStore } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { messagesFor, type Locale, type Messages } from "../../shared/i18n/messages";
 import type { Selection } from "../../shared/selection/contract";
-import { countFailedPolls, isMeterStale, isUsageDisabled, type PollTally } from "../../shared/usage/errors";
+import { countFailedPolls, isMeterStale, type PollTally } from "../../shared/usage/errors";
 import { clampPct, formatPct, type DisplayMode } from "../../shared/usage/format";
 import { groupKey, rowTiming, toGroups, type MeterRow } from "../../shared/usage/meter";
 import { formatPaceDelta, paceLabel, paceMarkPct, windowPace } from "../../shared/usage/pace";
 import { paceColor, paletteForSurface, type Palette } from "../../shared/usage/palette";
 import { useLocale } from "../i18n/locale";
 import { getSelection, subscribeSelection } from "../selection/store";
-import { heldAccounts } from "../usage/claims";
-import { useSelectionQuery, useUsageSnapshot } from "../usage/queries";
+import { useFleetSnapshot, useSelectionQuery } from "../usage/queries";
 import { setWebTitle } from "../web";
 
 const DEFAULT_SELECTION: Selection = { keys: [], configured: false, showPace: true, displayAs: "used" };
@@ -131,21 +130,28 @@ function MeterRowView({ row, ctx }: { row: MeterRow; ctx: RowContext }) {
  * The always-visible meter under the plugin's sidebar row: the pinned windows,
  * grouped per provider account under a heading that folds. Rendered by the
  * sidebar item itself, so it follows the host's theme, layout and lifetime.
+ *
+ * Paseo mounts one host's copy of the sidebar item for the whole app, so the
+ * meter reads every online host and shows each account once, from whichever
+ * host has a working reading for it (shared/usage/fleet.ts).
  */
 export function SidebarMeter({
   theme,
   layout,
+  hostId,
   onOpen,
 }: {
   theme: PluginTheme;
   layout: PluginHostProps["layout"];
+  /** The host Paseo mounted this copy for; its reading wins a tie. */
+  hostId: string;
   onOpen: () => void;
 }) {
   const locale = useLocale(layout.platform);
   const messages = useMemo(() => messagesFor(locale), [locale]);
-  const query = useUsageSnapshot();
+  const query = useFleetSnapshot(hostId);
   const selectionQuery = useSelectionQuery();
-  // The store carries the panel's saved edits the moment they land.
+  // One selection for the app (client/selection/store.ts); this host's copy only seeds it.
   const published = useSyncExternalStore(subscribeSelection, getSelection, getSelection);
   const selection = published ?? selectionQuery.data ?? DEFAULT_SELECTION;
   useSyncExternalStore(subscribeFold, getFoldVersion, getFoldVersion);
@@ -159,12 +165,8 @@ export function SidebarMeter({
     setWebTitle(blockRef.current, messages.title, layout.platform);
   });
 
-  // Usage switched off on the host is not a failure to fade over: there is nothing to show.
-  const disabled = query.isError && isUsageDisabled(query.error);
-  // Re-asked every render rather than remembered: the claim can lapse between
-  // polls, and a copy that lost it has to stop painting the block the other
-  // machine now owns.
-  const groups = query.data && !disabled ? toGroups(heldAccounts(query.data), selection, messages) : [];
+  // A host with usage switched off is skipped like any other host that did not answer.
+  const groups = query.data ? toGroups(query.data, selection, messages) : [];
   if (groups.length === 0) {
     return null;
   }

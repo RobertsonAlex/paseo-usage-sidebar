@@ -4,23 +4,16 @@
 
 What this fork adds on top of [upstream](https://github.com/RUIIIOVO/paseo-usage-sidebar), and why
 it works the way it does. The [README](../README.md) covers installing and using the plugin; this
-covers the account owner, per-account deduplication, pace, and the meter's folds.
+covers the account owner, per-account deduplication, the fleet meter, pace, and the meter's folds.
 
 ## Whose plan it is
 
 Each provider in the panel is headed by whose plan it is and which plan it is:
 `Claude (you@example.com)` on the left and `Max 20x` on the right.
 
-The account is the one part of the row Paseo does not report: its payload carries the plan but not
-whose plan it is, so the address is read from the provider CLI's own login file — `~/.claude.json`
-for Claude, the `id_token` in `~/.codex/auth.json` for Codex. Read-only, and only the address; the
-tokens beside it are never touched. A provider that keeps its account somewhere else simply shows no
-address.
-
-`server/usage/account.ts` stitches the address on server-side, because it comes off the filesystem,
-which only that half of the plugin can reach. The login files it reads are cached for ten minutes:
-`~/.claude.json` also holds your per-project history and grows into the megabytes, and the address
-inside changes about as often as you log in.
+Paseo 0.11 and later name an account-scoped row `Source (account)`, so the address comes off the row
+name itself (`shared/usage/account.ts`). No file is read for it. A provider whose row carries no
+account shows no address.
 
 ### One block per account
 
@@ -28,19 +21,30 @@ Knowing the account also collapses duplicates: a subscription reports the same n
 signed in, so two providers resolving to one account render as one block instead of the same reading
 twice. Rows whose account cannot be read are never folded together — unknown is not one account.
 
-That holds across machines too. Paseo's client can hold several daemons at once, and each runs its own
-copy of this plugin, so a subscription signed in here and on a second PC used to paint itself twice in
-one sidebar. The copies cannot see each other through the daemon — nothing in `provider.usage.list`
-has a host dimension — but their client bundles all run in the same renderer, so they claim accounts
-through it (`client/usage/claims.ts`): the first copy to poll paints the shared subscription and the
-others paint nothing for it.
+### The sidebar shows the fleet
 
-The claim is a lease. Only a poll that came back with numbers renews it, and teardown releases it
-outright; a copy repaints between polls, because the countdowns tick against the clock, but repainting
-only asks whether it still holds the account. So a machine whose daemon goes unreachable goes quiet
-after one lease and the other takes over, rather than holding a frozen block forever by failing at it.
-A host still on an older build does not take part, and keeps painting its duplicate until you update
-it.
+Paseo's client can hold several hosts at once, and each runs its own copy of this plugin. Paseo merges
+the copies' sidebar items into one row and mounts only one host's copy: the host in the current route,
+else the one last picked in the panel's host menu, else the first. Left alone, the meter would show
+that one host and nothing else.
+
+So the meter reads every online host itself, straight from each daemon
+(`getPaseoClient(id).providers.listUsage()`), and merges the readings one block per account
+(`shared/usage/fleet.ts`). The host Paseo mounted is asked first; for each account the first working
+reading wins, so a host that is rate-limited or erroring hands its accounts to one that is not. A host
+that cannot be read is skipped. Each app sees only the hosts it is connected to: a laptop connected to
+a VM shows the VM's accounts too, and the VM's own app shows only itself.
+
+The panel stays per host: its host menu picks whose readings it shows.
+
+### One set of pins per app
+
+A pin names a provider id and a window (`claude:weekly`), not an account, so on the fleet meter it
+shows that window for every account that reports it. Pins belong to the app, not to a host: every
+host's copy reads and edits one store on the renderer's `globalThis`, saved to localStorage
+(`client/selection/store.ts`). Each edit is also written to the panel's host's state file, and the
+first host found with pins seeds the app when it has none of its own: a fresh install, or a phone,
+which has no localStorage.
 
 ## The sidebar meter's headings
 
@@ -105,24 +109,21 @@ changes what upstream reads from disk; everything else is as upstream.
 
 - **Server code** runs in a daemon subprocess and calls exactly one SDK method,
   `paseo.providers.listUsage()`. No other daemon operation, no sockets of its own.
-- **No credentials** are read, stored, or transmitted. Two login files are opened read-only for the
-  account address alone — `oauthAccount.emailAddress` in `~/.claude.json`, and the `email` claim of
-  the `id_token` in `~/.codex/auth.json`. No access or refresh token is read, and the macOS Keychain
-  is never queried. The address is rendered in the panel and goes nowhere else.
-- **No outbound network access.** Nothing leaves the machine; the plugin opens no sockets at all.
-- **One write, and it is yours** — the pin set and pace toggle. It holds provider and window ids and
-  that one boolean: no tokens, no usage numbers, nothing account-identifying.
-- **Client code** renders the response and persists nothing. Its one piece of shared state is the
-  account claim: an in-memory map on the renderer's `globalThis`, holding the same addresses already
-  shown on screen. It never leaves the renderer and never reaches disk.
+- **No credentials** are read, stored, or transmitted. The account address comes off the row name
+  Paseo already reports; no login file is opened.
+- **No new network access.** The meter asks the other hosts for usage through the connections Paseo
+  already holds to them; the plugin opens no sockets of its own.
+- **Two writes, both yours** — the pin set and display choices, in each host's state file and in the
+  app's localStorage. They hold provider and window ids and two display settings: no tokens, no usage
+  numbers, nothing account-identifying.
 
 ## Files this fork adds
 
 ```
-client/usage/claims.ts          # One block per account across hosts, claimed in the renderer
-client/usage/claims.check.ts    # Its self-check — handover, renewal, expiry
-server/usage/account.ts         # Plan owner from the CLI login files, and per-account dedupe
-server/usage/account.check.ts   # Its self-check — login-file parsing and the dedupe rule
+client/selection/store.ts       # One pin set per app, shared by every host's copy
+shared/usage/account.ts         # Plan owner from Paseo's row name, and per-account dedupe
+shared/usage/account.check.ts   # Its self-check — the account key and the dedupe rule
+shared/usage/fleet.ts           # Every host's reading merged, one block per account
 shared/usage/pace.ts            # Spend against the clock: elapsed share, delta, thresholds
 shared/usage/pace.check.ts      # Its self-check — the one module here with arithmetic in it
 ```
@@ -132,6 +133,5 @@ touched, alongside `npm run typecheck` and `npm test`:
 
 ```bash
 npx tsx shared/usage/pace.check.ts      # the pace arithmetic
-npx tsx server/usage/account.check.ts   # login-file parsing, per-account dedupe
-npx tsx client/usage/claims.check.ts    # which copy paints a shared subscription
+npx tsx shared/usage/account.check.ts   # the account key, per-account dedupe
 ```

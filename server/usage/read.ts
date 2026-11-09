@@ -1,6 +1,6 @@
 import type { PluginHandlerContext } from "@getpaseo/plugin/server";
-import { UsageSnapshotSchema, type UsageSnapshot } from "../../shared/usage/contract";
-import { withAccounts } from "./account";
+import { normalizeSnapshot, type UsageSnapshot } from "../../shared/usage/contract";
+import { withAccounts } from "../../shared/usage/account";
 import {
   errorMessage,
   HOST_LINK_LOST_CODE,
@@ -20,20 +20,6 @@ import {
  * `WebSocket`/`MessageEvent`/`CloseEvent` globals, so it is gone along with the
  * `PASEO_USAGE_SIDEBAR_HOST` override and the config.json endpoint probing.
  */
-
-/**
- * The daemon's payload is validated rather than trusted: a provider that reports
- * a window shape this plugin does not model should degrade to a missing field,
- * not crash the surface.
- */
-function normalize(payload: unknown): UsageSnapshot {
-  const raw = (payload ?? {}) as { fetchedAt?: unknown; providers?: unknown };
-  return UsageSnapshotSchema.parse({
-    fetchedAt: typeof raw.fetchedAt === "string" ? raw.fetchedAt : null,
-    source: "sdk",
-    providers: Array.isArray(raw.providers) ? raw.providers : [],
-  });
-}
 
 /**
  * Failure history, kept per plugin process rather than per call: the grace
@@ -94,7 +80,7 @@ export async function readUsage(
     }
     // Collapsing duplicate accounts has to happen before the panel and the sidebar
     // meter each resolve the same snapshot.
-    const snapshot = withAccounts(normalize(await context.paseo.providers.listUsage()));
+    const snapshot = withAccounts(normalizeSnapshot(await context.paseo.providers.listUsage()));
     // A reading got through, so whatever the last failures were, they were not
     // this session ending.
     linkFailure = INITIAL_LINK_FAILURE_STATE;

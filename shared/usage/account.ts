@@ -1,11 +1,11 @@
-import type { ProviderUsage, UsageSnapshot } from "../../shared/usage/contract";
+import type { ProviderUsage, UsageSnapshot } from "./contract";
 
 /**
  * Whose subscription a row is reporting.
  *
  * Paseo 0.11 names an account-scoped row `Source (account)` and that name is
- * shown as-is. The account is still pulled out as a key: dedupe and the
- * cross-machine claims (client/usage/claims.ts) group by it.
+ * shown as-is. The account is still pulled out as a key: dedupe within a host
+ * and the fleet merge across hosts (shared/usage/fleet.ts) group by it.
  */
 export function accountOf(displayName: string): string | null {
   return displayName.match(/ \(([^()]+)\)$/)?.[1] ?? null;

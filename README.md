@@ -34,7 +34,7 @@
 - 🎨 **Native Look & Feel**: Follows all seven built-in themes, picking up a theme switch without a reload.
 - 🌐 **i18n Ready**: Localized into all nine languages Paseo ships—English, Simplified Chinese, Arabic, Spanish, French, Japanese, Korean, Portuguese (Brazil), and Russian.
 
-The account address is the one thing Paseo does not report, so it is read — the address alone, read-only — from the provider CLI's own login file. See [docs/DESIGN.md](./docs/DESIGN.md) for exactly what is read, and for how pace, deduplication, and the cross-machine claim work.
+The sidebar meter reads every host the app is connected to and shows each account once, from whichever host has a working reading. See [docs/DESIGN.md](./docs/DESIGN.md) for how the account is found, and for how pace, deduplication, and the fleet meter work.
 
 ---
 

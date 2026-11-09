@@ -4,17 +4,16 @@ import { SidebarRow } from "@getpaseo/plugin/client/ui";
 import { titles } from "./client/i18n/titles";
 import { SidebarMeter } from "./client/ui/sidebar-meter";
 import { UsageSurface } from "./client/ui/usage-surface";
-import { releaseAccounts } from "./client/usage/claims";
 
 const SURFACE_ID = "usage";
 
 /** The row that opens the screen, with the meter under it; the item moves and hides as one block. */
-function SidebarItem({ theme, layout, currentScreen, openScreen }: PluginSidebarItemProps) {
+function SidebarItem({ theme, layout, host, currentScreen, openScreen }: PluginSidebarItemProps) {
   const open = () => openScreen({ screenId: SURFACE_ID });
   return (
     <>
       <SidebarRow icon="Gauge" active={currentScreen?.screenId === SURFACE_ID} onPress={open} />
-      <SidebarMeter theme={theme} layout={layout} onOpen={open} />
+      <SidebarMeter theme={theme} layout={layout} hostId={host.id} onOpen={open} />
     </>
   );
 }
@@ -51,7 +50,5 @@ export default function contribute(client: PluginClientContext): PluginCleanup {
     for (const remove of removers) {
       remove();
     }
-    // Last, and unconditional: another host's copy is waiting on these.
-    releaseAccounts();
   };
 }

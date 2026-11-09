@@ -57,9 +57,37 @@ describe("toGroups", () => {
     assert.notEqual(groupKey(groups[0]!), groupKey(groups[1]!));
   });
 
-  it("splits a group again when pins interleave providers", () => {
+  it("keeps one heading per account when pins interleave providers", () => {
     const groups = toGroups(data, selection(["claude:weekly", "claude-2:weekly", "claude:five_hour"]), en);
-    assert.equal(groups.length, 3);
+    assert.deepEqual(
+      groups.map((group) => [group.account, group.rows.map((row) => row.window.id)]),
+      [
+        ["a@x", ["weekly", "five_hour"]],
+        ["b@x", ["weekly"]],
+      ],
+    );
+  });
+
+  it("shows a pin for every account reporting it, as across hosts", () => {
+    // Two machines, two subscriptions, the same provider id on each.
+    const fleet = snapshot([
+      provider("claude", "main@x", [
+        { id: "five_hour", label: "Session", usedPct: 40 },
+        { id: "weekly", label: "Weekly", usedPct: 20 },
+      ]),
+      provider("claude", "burt@x", [
+        { id: "five_hour", label: "Session", usedPct: 5 },
+        { id: "weekly", label: "Weekly", usedPct: 1 },
+      ]),
+    ]);
+    const groups = toGroups(fleet, selection(["claude:five_hour", "claude:weekly"]), en);
+    assert.deepEqual(
+      groups.map((group) => [group.account, group.rows.map((row) => row.usedPct)]),
+      [
+        ["main@x", [40, 20]],
+        ["burt@x", [5, 1]],
+      ],
+    );
   });
 
   it("prints remaining but keeps tone on used", () => {

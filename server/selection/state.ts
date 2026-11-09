@@ -1,7 +1,12 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { SelectionSchema, type Selection } from "../../shared/selection/contract";
+import {
+  applySelectionPatch,
+  SelectionSchema,
+  type Selection,
+  type SelectionPatch,
+} from "../../shared/selection/contract";
 
 /**
  * The pin list is kept in the plugin's own state file. That predates Paseo 0.8's
@@ -29,29 +34,9 @@ export function readSelectionState(): Selection {
   }
 }
 
-/**
- * Merges rather than replaces: the settings in this file are written by
- * different controls, and an absent field means "leave it alone", not "clear
- * it". Pinning stays the only thing that marks the selection configured — the
- * pace and used/remaining toggles are display preferences and have no business
- * promoting the default pin set into a frozen one.
- */
-export function writeSelectionState({
-  keys,
-  showPace,
-  displayAs,
-}: {
-  keys?: string[];
-  showPace?: boolean;
-  displayAs?: Selection["displayAs"];
-}): Selection {
-  const current = readSelectionState();
-  const next: Selection = {
-    keys: keys ? [...new Set(keys.filter((key) => typeof key === "string" && key.length > 0))] : current.keys,
-    configured: keys ? true : current.configured,
-    showPace: showPace ?? current.showPace,
-    displayAs: displayAs ?? current.displayAs,
-  };
+/** Applies the patch to what is on disk; see `applySelectionPatch` for the merge rule. */
+export function writeSelectionState(patch: SelectionPatch): Selection {
+  const next = applySelectionPatch(readSelectionState(), patch);
   const path = stateFile();
   try {
     mkdirSync(join(path, ".."), { recursive: true, mode: 0o700 });

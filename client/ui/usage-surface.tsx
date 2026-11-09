@@ -2,7 +2,7 @@ import type { PluginTheme } from "@getpaseo/plugin";
 import { useRpc, type PluginScreenProps } from "@getpaseo/plugin/client";
 import { Icon } from "@getpaseo/plugin/client/ui";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import React, { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { Fragment, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -32,17 +32,18 @@ import { formatPaceDelta, paceLabel, paceMarkPct, windowPace, type PaceTrend } f
 import { errorMessage, panelFailureView } from "../../shared/usage/errors";
 import { isRtl, messagesFor, type Locale, type Messages } from "../../shared/i18n/messages";
 import { useLocale } from "../i18n/locale";
-import { publishSelection } from "../selection/store";
-import { heldAccounts } from "../usage/claims";
+import { getSelection, publishSelection, subscribeSelection } from "../selection/store";
 import { SELECTION_KEY, useSelectionQuery, useUsageSnapshot } from "../usage/queries";
 import { PinButton } from "./pin-button";
 import {
+  applySelectionPatch,
   defaultKeys,
   pinnedRows,
   reorderVisible,
   rowKey,
   writeSelection,
   type PinnedRow,
+  type SelectionPatch,
 } from "../../shared/selection/contract";
 import { windowLabel } from "../../shared/usage/window-label";
 import {
@@ -892,22 +893,17 @@ export function UsageSurface({ theme, layout }: PluginScreenProps) {
   const persistSelection = useRpc(writeSelection);
 
   const query = useUsageSnapshot();
-  /**
-   * The panel is a place you go to look, so it never renders itself blank: if
-   * every account it could show is held by another host's copy of this plugin,
-   * it shows them all rather than an empty card. Only the meter — which is
-   * ambient, and where the duplicate is actually noise — hides.
-   */
-  const snapshot = useMemo(() => {
-    if (!query.data) {
-      return undefined;
-    }
-    const held = heldAccounts(query.data);
-    return held.providers.length > 0 ? held : query.data;
-  }, [query.data]);
+  const snapshot = query.data;
 
   const queryClient = useQueryClient();
   const selectionQuery = useSelectionQuery();
+  /**
+   * The app's pins, not this host's: the sidebar shows them across the fleet,
+   * so the panel of every host edits the one set (client/selection/store.ts).
+   * This host's saved copy stands in only until the store has anything.
+   */
+  const appSelection = useSyncExternalStore(subscribeSelection, getSelection, getSelection);
+  const savedSelection = appSelection ?? selectionQuery.data;
 
   const providers = snapshot?.providers ?? [];
   const refreshing = useBusy(query.isFetching);
@@ -928,12 +924,11 @@ export function UsageSurface({ theme, layout }: PluginScreenProps) {
    * paints. Until the user pins anything it mirrors the meter's own default.
    */
   const persistedOrder = useMemo(() => {
-    const selection = selectionQuery.data;
-    if (selection?.configured) {
-      return selection.keys;
+    if (savedSelection?.configured) {
+      return savedSelection.keys;
     }
     return snapshot ? defaultKeys(snapshot) : [];
-  }, [selectionQuery.data, snapshot]);
+  }, [savedSelection, snapshot]);
 
   /**
    * An edit takes effect locally first and stays authoritative afterwards: the
@@ -945,8 +940,8 @@ export function UsageSurface({ theme, layout }: PluginScreenProps) {
   const order = localOrder ?? persistedOrder;
   /** Same local-first rule as the order: the toggles must not wait on a round trip. */
   const [localShowPace, setLocalShowPace] = useState<boolean | null>(null);
-  const showPace = localShowPace ?? selectionQuery.data?.showPace ?? true;
-  const displayAs: DisplayMode = localDisplayAs ?? selectionQuery.data?.displayAs ?? "used";
+  const showPace = localShowPace ?? savedSelection?.showPace ?? true;
+  const displayAs: DisplayMode = localDisplayAs ?? savedSelection?.displayAs ?? "used";
   const pinnedKeys = useMemo(() => new Set(order), [order]);
 
   const pinned: PinnedRow[] = useMemo(() => {
@@ -962,14 +957,17 @@ export function UsageSurface({ theme, layout }: PluginScreenProps) {
   }, [snapshot, order, messages]);
 
   /**
-   * One writer for every setting, each sent on its own: the server merges, so a
+   * One writer for every setting, each sent on its own: both copies merge, so a
    * reorder never carries a toggle along and a toggle never rewrites the pins.
+   * This host's state file is written first and the app's store only once that
+   * landed; the store takes the patch, not the host's answer, because the host's
+   * file may hold another arrangement from before the app had one.
    */
   const saveSelection = useMutation({
-    mutationFn: (input: { keys?: string[]; showPace?: boolean; displayAs?: DisplayMode }) => persistSelection(input),
-    onSuccess: (selection) => {
-      queryClient.setQueryData(SELECTION_KEY, selection);
-      publishSelection(selection);
+    mutationFn: (input: SelectionPatch) => persistSelection(input),
+    onSuccess: (hostSelection, input) => {
+      queryClient.setQueryData(SELECTION_KEY, hostSelection);
+      publishSelection(applySelectionPatch(getSelection() ?? hostSelection, input));
     },
     /**
      * The server fails this RPC rather than swallow a write it could not make,

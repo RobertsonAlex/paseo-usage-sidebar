@@ -1,5 +1,5 @@
 import type { Locale, Messages } from "../i18n/messages";
-import { pinnedRows, type Selection } from "../selection/contract";
+import { defaultKeys, rowKey, type Selection } from "../selection/contract";
 import type { UsageSnapshot, UsageTone, UsageWindow } from "./contract";
 import {
   formatResetPrimary,
@@ -8,6 +8,7 @@ import {
   formatWindowReset,
   resolveTone,
   windowDisplayPct,
+  windowUsedPct,
 } from "./format";
 import { windowLabel } from "./window-label";
 
@@ -37,29 +38,47 @@ export function rowTiming(row: MeterRow, messages: Messages, locale: Locale): Ro
 }
 
 /**
- * Group pinned rows by provider, keeping the order Paseo reports. The provider
- * name is always shown: a bare "Weekly" is ambiguous as soon as a second
- * provider reports usage.
+ * Group pinned rows by provider and account, in pinned order.
+ *
+ * A pin names a provider id and a window, not an account, so it resolves to that
+ * window on every account reporting it. Within one host each account has a
+ * provider id of its own; across the fleet two machines report the same id for
+ * two different subscriptions, and both are what the pin means.
+ *
+ * Each heading appears once, where its first pinned row falls, and collects its
+ * rows in pinned order beneath it. The provider name is always shown: a bare
+ * "Weekly" is ambiguous as soon as a second provider reports usage.
  */
 export function toGroups(snapshot: UsageSnapshot, selection: Selection, messages: Messages): MeterGroup[] {
   const groups: MeterGroup[] = [];
-  const rows = pinnedRows(snapshot, selection, (_provider, window) => windowLabel(window, messages), messages);
-  for (const row of rows) {
-    const entry: MeterRow = {
-      label: row.label,
-      usedPct: row.usedPct,
-      displayPct: windowDisplayPct(row.window, selection.displayAs),
-      tone: resolveTone(row.window.tone, row.usedPct),
-      window: row.window,
-    };
-    const last = groups[groups.length - 1];
-    // Both halves of the heading decide the grouping, not just the name: two
-    // accounts on one provider are two plans with two sets of windows, and a
-    // heading that named one of them would be counting the other's rows.
-    if (last && last.provider === row.providerName && last.account === row.accountLabel) {
-      last.rows.push(entry);
-    } else {
-      groups.push({ provider: row.providerName, account: row.accountLabel, rows: [entry] });
+  const byHeading = new Map<string, MeterGroup>();
+  const seen = new Set<string>();
+  for (const key of selection.configured ? selection.keys : defaultKeys(snapshot)) {
+    for (const provider of snapshot.providers) {
+      const window = provider.windows.find((candidate) => rowKey(provider.providerId, candidate.id) === key);
+      // Both halves of the heading decide the grouping, not just the name: two
+      // accounts on one provider are two plans with two sets of windows, and a
+      // heading that named one of them would be counting the other's rows.
+      const heading: MeterGroup = { provider: provider.displayName, account: provider.accountLabel, rows: [] };
+      const headingKey = groupKey(heading);
+      if (!window || seen.has(`${headingKey}\u0000${key}`)) {
+        continue;
+      }
+      seen.add(`${headingKey}\u0000${key}`);
+      const usedPct = windowUsedPct(window);
+      let group = byHeading.get(headingKey);
+      if (!group) {
+        group = heading;
+        byHeading.set(headingKey, group);
+        groups.push(group);
+      }
+      group.rows.push({
+        label: windowLabel(window, messages),
+        usedPct,
+        displayPct: windowDisplayPct(window, selection.displayAs),
+        tone: resolveTone(window.tone, usedPct),
+        window,
+      });
     }
   }
   return groups;

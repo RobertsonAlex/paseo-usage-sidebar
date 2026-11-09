@@ -47,6 +47,28 @@ export const writeSelection = defineRpc({
   output: SelectionSchema,
 });
 
+export type SelectionPatch = {
+  keys?: string[];
+  showPace?: boolean;
+  displayAs?: Selection["displayAs"];
+};
+
+/**
+ * Merges rather than replaces: the settings are written by different controls,
+ * and an absent field means "leave it alone", not "clear it". Pinning stays the
+ * only thing that marks the selection configured — the pace and used/remaining
+ * toggles are display preferences and have no business promoting the default
+ * pin set into a frozen one.
+ */
+export function applySelectionPatch(current: Selection, { keys, showPace, displayAs }: SelectionPatch): Selection {
+  return {
+    keys: keys ? [...new Set(keys.filter((key) => typeof key === "string" && key.length > 0))] : current.keys,
+    configured: keys ? true : current.configured,
+    showPace: showPace ?? current.showPace,
+    displayAs: displayAs ?? current.displayAs,
+  };
+}
+
 export function rowKey(providerId: string, windowId: string): string {
   return `${providerId}:${windowId}`;
 }
